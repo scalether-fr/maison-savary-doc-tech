@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Savary — Cartographie des flux de données</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-hover: #232736;
+    --border: #2a2e3b;
+    --border-active: #4a5068;
+    --text: #e2e4ea;
+    --text-muted: #8b8fa3;
+    --text-dim: #5c6078;
+
+    --source-color: #e8913a;
+    --script-color: #6c9ef8;
+    --storage-color: #4ecba0;
+    --output-color: #c678dd;
+
+    --source-bg: #e8913a18;
+    --script-bg: #6c9ef818;
+    --storage-bg: #4ecba018;
+    --output-bg: #c678dd18;
+
+    --edge-default: #3a3e50;
+    --edge-active: #6c9ef8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── Header ── */
+  .header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 16px; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .header h1 span { color: var(--text-muted); font-weight: 400; }
+  .legend {
+    display: flex; gap: 20px; align-items: center;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+
+  /* ── Canvas ── */
+  .canvas-container {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    cursor: grab;
+  }
+  .canvas-container:active { cursor: grabbing; }
+  .canvas {
+    position: absolute;
+    transform-origin: 0 0;
+  }
+
+  /* ── Edges (SVG) ── */
+  .edges-layer {
+    position: absolute; top: 0; left: 0;
+    width: 3000px; height: 2000px;
+    pointer-events: none;
+  }
+  .edge-path {
+    fill: none;
+    stroke: var(--edge-default);
+    stroke-width: 2;
+    transition: stroke 0.3s, stroke-width 0.3s;
+  }
+  .edge-path.active {
+    stroke: var(--edge-active);
+    stroke-width: 2.5;
+  }
+  .edge-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    fill: var(--text-dim);
+    transition: fill 0.3s;
+  }
+  .edge-label.active { fill: var(--text-muted); }
+
+  /* ── Nodes ── */
+  .node {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+    min-width: 170px;
+    user-select: none;
+  }
+  .node:hover {
+    border-color: var(--border-active);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .node.active {
+    box-shadow: 0 0 0 2px var(--edge-active), 0 4px 24px rgba(108,158,248,0.15);
+    border-color: var(--edge-active);
+  }
+
+  .node-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .node[data-type="source"] .node-type { color: var(--source-color); }
+  .node[data-type="script"] .node-type { color: var(--script-color); }
+  .node[data-type="storage"] .node-type { color: var(--storage-color); }
+  .node[data-type="output"] .node-type { color: var(--output-color); }
+
+  .node[data-type="source"] { border-left: 3px solid var(--source-color); background: var(--source-bg); }
+  .node[data-type="script"] { border-left: 3px solid var(--script-color); background: var(--script-bg); }
+  .node[data-type="storage"] { border-left: 3px solid var(--storage-color); background: var(--storage-bg); }
+  .node[data-type="output"] { border-left: 3px solid var(--output-color); background: var(--output-bg); }
+
+  .node-name {
+    font-size: 14px; font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: -0.01em;
+  }
+  .node-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  /* ── Detail Panel ── */
+  .panel-overlay {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 380px; z-index: 200;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-overlay.open { transform: translateX(0); }
+
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-header h2 { font-size: 15px; font-weight: 600; }
+  .panel-close {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 20px; padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .panel-close:hover { background: var(--surface-hover); color: var(--text); }
+
+  .panel-body {
+    padding: 20px 24px; overflow-y: auto; flex: 1;
+  }
+  .panel-section {
+    margin-bottom: 20px;
+  }
+  .panel-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .panel-field {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .panel-field:last-child { border-bottom: none; }
+  .panel-field-label { color: var(--text-muted); }
+  .panel-field-value { color: var(--text); font-weight: 500; text-align: right; max-width: 200px; }
+
+  .panel-connections {
+    list-style: none;
+  }
+  .panel-connections li {
+    padding: 8px 10px;
+    background: var(--bg);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .conn-arrow { color: var(--text-dim); font-size: 14px; }
+  .conn-dir { 
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; 
+    padding: 2px 6px; 
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .conn-dir.in { background: var(--storage-bg); color: var(--storage-color); }
+  .conn-dir.out { background: var(--script-bg); color: var(--script-color); }
+
+  .panel-doc-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: var(--edge-active);
+    color: #0f1117;
+    border: none; border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: opacity 0.15s;
+  }
+  .panel-doc-btn:hover { opacity: 0.85; }
+  .panel-doc-btn.disabled {
+    background: var(--surface-hover);
+    color: var(--text-dim);
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .node { position: absolute; }
+  .node-doc-indicator {
+    position: absolute; top: 6px; right: 8px;
+    font-size: 11px; color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  /* ── Zoom controls ── */
+  .zoom-controls {
+    position: fixed; bottom: 20px; right: 20px; z-index: 100;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .zoom-btn {
+    width: 36px; height: 36px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text-muted);
+    cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s, color 0.15s;
+  }
+  .zoom-btn:hover { background: var(--surface-hover); color: var(--text); }
+
+  .zoom-level {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text-dim);
+    text-align: center; padding: 4px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Cartographie des flux <span>— Maison Savary</span></h1>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--source-color)"></div>Source (ERP)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--script-color)"></div>Script (GAS)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--storage-color)"></div>Stockage</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--output-color)"></div>Restitution</div>
+  </div>
+</div>
+
+<div class="canvas-container" id="canvasContainer">
+  <div class="canvas" id="canvas">
+    <svg class="edges-layer" id="edgesLayer"></svg>
+  </div>
+</div>
+
+<div class="panel-overlay" id="detailPanel">
+  <div class="panel-header">
+    <h2 id="panelTitle">—</h2>
+    <button class="panel-close" id="panelClose">×</button>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoomIn">+</button>
+  <div class="zoom-level" id="zoomLevel">100%</div>
+  <button class="zoom-btn" id="zoomOut">−</button>
+  <button class="zoom-btn" id="zoomFit" style="font-size:12px;margin-top:4px">⊡</button>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  DATA MODEL
+// ════════════════════════════════════════════════
+
+const nodes = [
+  // Sources
+  {
+    id: 'popina',
+    type: 'source',
+    label: 'Popina',
+    desc: 'Caisse / Point de vente',
+    x: 80, y: 160,
+    meta: {
+      'Type': 'ERP — POS',
+      'Périmètre': 'Ventes, tickets, catégories',
+      'PDV couverts': 'Multi-sites (Angers, Nantes, etc.)',
+      'Accès': 'Backoffice web (session cookie + CSRF)',
+      'Limites': 'Pas d\'API, scraping HTTP uniquement',
+      'Risque': 'Migration backoffice annoncée'
+    }
+  },
+  {
+    id: 'helloharel',
+    type: 'source',
+    label: 'HelloHarel',
+    desc: 'Gestion production & recettes',
+    x: 80, y: 440,
+    meta: {
+      'Type': 'ERP — Production',
+      'Périmètre': 'Produits, recettes, ordres de fabrication',
+      'Accès': 'API REST',
+      'Particularités': '19 SKU avec espaces/tirets (impact joins BQ)'
+    }
+  },
+  // Scripts
+  {
+    id: 'gas_popina',
+    type: 'script',
+    label: 'Script Popina',
+    desc: 'Export multi-PDV mensuel',
+    x: 380, y: 120,
+    meta: {
+      'Langage': 'Google Apps Script',
+      'Fréquence': 'Mensuel (trigger manuel)',
+      'Fonction': 'Login → scrape filtres → export CSV par PDV',
+      'Données extraites': 'CA par catégorie, par jour, par PDV',
+      'Statut': 'En cours de debug (0 rows)',
+      'Logs': 'Préfixe [LOGIN], [SCRAPE], [EXPORT]'
+    }
+  },
+  {
+    id: 'gas_harel',
+    type: 'script',
+    label: 'Script HelloHarel',
+    desc: 'Sync produits & ordres',
+    x: 380, y: 400,
+    meta: {
+      'Langage': 'Google Apps Script',
+      'Fréquence': 'Automatique (trigger horaire)',
+      'Fonction': 'Appels API → écriture Sheets',
+      'Données extraites': 'Catalogue produits, ordres de production',
+      'Statut': 'Opérationnel'
+    }
+  },
+  {
+    id: 'gas_simulateur',
+    type: 'script',
+    label: 'Simulateur Recettes',
+    desc: 'Coûts & prix de revient',
+    x: 380, y: 580,
+    meta: {
+      'Langage': 'Google Apps Script + HTML Sidebar',
+      'Fréquence': 'À la demande (utilisateur)',
+      'Fonction': 'Consultation / création / édition recettes',
+      'Utilisateur principal': 'Paul Burckart',
+      'Statut': 'Livré (rebuild récent)'
+    }
+  },
+  // Storage
+  {
+    id: 'sheets_ventes',
+    type: 'storage',
+    label: 'Sheets — Ventes',
+    desc: 'Données POS consolidées',
+    x: 680, y: 120,
+    meta: {
+      'Type': 'Google Sheets',
+      'Contenu': 'CA mensuel par PDV, par catégorie',
+      'Alimentation': 'Script Popina (GAS)',
+      'Consommé par': 'BigQuery (table externe)'
+    }
+  },
+  {
+    id: 'sheets_prod',
+    type: 'storage',
+    label: 'Sheets — Production',
+    desc: 'Produits & ordres de fab',
+    x: 680, y: 340,
+    meta: {
+      'Type': 'Google Sheets',
+      'Contenu': 'Catalogue produits, ordres de production',
+      'Alimentation': 'Script HelloHarel (GAS)',
+      'Consommé par': 'BigQuery (table externe)',
+      'Sync': 'IMPORTRANGE vers Simulateur'
+    }
+  },
+  {
+    id: 'sheets_prix',
+    type: 'storage',
+    label: 'Sheets — Prix centralisés',
+    desc: 'Pricing matières premières',
+    x: 680, y: 530,
+    meta: {
+      'Type': 'Google Sheets',
+      'Contenu': 'Prix unitaires matières premières',
+      'Alimentation': 'Saisie manuelle',
+      'Consommé par': 'Simulateur (IMPORTRANGE)'
+    }
+  },
+  // BigQuery
+  {
+    id: 'bigquery',
+    type: 'storage',
+    label: 'BigQuery',
+    desc: 'Entrepôt de données',
+    x: 980, y: 230,
+    meta: {
+      'Type': 'Data warehouse',
+      'Tables': 'Tables externes liées à Sheets',
+      'Vues': 'production_kg, ventes_consolidees, etc.',
+      'Dédup': 'ROW_NUMBER() OVER (PARTITION BY code)',
+      'Problème connu': 'SKU avec espaces/tirets cassent les regex joins',
+      'Fréquence refresh': 'Automatique via Sheets connector'
+    }
+  },
+  // Outputs
+  {
+    id: 'looker',
+    type: 'output',
+    label: 'Looker Studio',
+    desc: 'Dashboards de pilotage',
+    x: 1280, y: 160,
+    meta: {
+      'Type': 'BI / Restitution',
+      'Dashboards': 'Production KPIs, Ventes, ETP',
+      'Source': 'BigQuery (vues)',
+      'Utilisateurs': 'Direction, Julien (production)',
+      'Limitation connue': 'Combo chart = 1 métrique avec breakdown'
+    }
+  },
+  {
+    id: 'simulateur_ui',
+    type: 'output',
+    label: 'Simulateur UI',
+    desc: 'Interface prix de revient',
+    x: 1280, y: 440,
+    meta: {
+      'Type': 'Webapp (HTML Sidebar)',
+      'Fonction': 'Consulter/créer/éditer recettes + coûts',
+      'Source données': 'Sheets Production + Sheets Prix (IMPORTRANGE)',
+      'Utilisateur': 'Paul Burckart',
+      'Statut': 'Livré'
+    }
+  }
+];
+
+const edges = [
+  { from: 'popina', to: 'gas_popina', label: 'HTTP/scrape' },
+  { from: 'helloharel', to: 'gas_harel', label: 'API REST' },
+  { from: 'gas_popina', to: 'sheets_ventes', label: 'écriture' },
+  { from: 'gas_harel', to: 'sheets_prod', label: 'écriture' },
+  { from: 'sheets_prod', to: 'sheets_prix', label: 'IMPORTRANGE', style: 'dashed' },
+  { from: 'sheets_prix', to: 'gas_simulateur', label: 'lecture' },
+  { from: 'sheets_prod', to: 'gas_simulateur', label: 'lecture' },
+  { from: 'gas_simulateur', to: 'simulateur_ui', label: 'render' },
+  { from: 'sheets_ventes', to: 'bigquery', label: 'table externe' },
+  { from: 'sheets_prod', to: 'bigquery', label: 'table externe' },
+  { from: 'bigquery', to: 'looker', label: 'vues SQL' },
+];
+
+// ════════════════════════════════════════════════
+//  RENDER
+// ════════════════════════════════════════════════
+
+const canvas = document.getElementById('canvas');
+const edgesLayer = document.getElementById('edgesLayer');
+const panel = document.getElementById('detailPanel');
+const panelTitle = document.getElementById('panelTitle');
+const panelBody = document.getElementById('panelBody');
+
+let activeNodeId = null;
+
+// Create node elements
+const nodeElements = {};
+nodes.forEach(n => {
+  const el = document.createElement('div');
+  el.className = 'node';
+  el.dataset.type = n.type;
+  el.dataset.id = n.id;
+  el.style.left = n.x + 'px';
+  el.style.top = n.y + 'px';
+  el.innerHTML = `
+    <div class="node-type">${n.type === 'source' ? 'source erp' : n.type === 'script' ? 'script gas' : n.type === 'storage' ? 'stockage' : 'restitution'}</div>
+    <div class="node-name">${n.label}</div>
+    <div class="node-desc">${n.desc}</div>
+    ${n.doc ? '<div class="node-doc-indicator" title="Google Doc lié">↗</div>' : ''}
+  `;
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectNode(n.id);
+  });
+  canvas.appendChild(el);
+  nodeElements[n.id] = el;
+});
+
+// Get node center coordinates
+function getNodePort(id, side) {
+  const el = nodeElements[id];
+  const x = parseInt(el.style.left);
+  const y = parseInt(el.style.top);
+  const w = el.offsetWidth || 170;
+  const h = el.offsetHeight || 70;
+  if (side === 'right') return { x: x + w, y: y + h / 2 };
+  if (side === 'left') return { x: x, y: y + h / 2 };
+  return { x: x + w / 2, y: y + h / 2 };
+}
+
+function renderEdges() {
+  edgesLayer.innerHTML = '';
+  edges.forEach(e => {
+    const from = getNodePort(e.from, 'right');
+    const to = getNodePort(e.to, 'left');
+
+    const dx = to.x - from.x;
+    const cp = Math.max(60, dx * 0.4);
+    const d = `M${from.x},${from.y} C${from.x + cp},${from.y} ${to.x - cp},${to.y} ${to.x},${to.y}`;
+
+    const isActive = activeNodeId && (e.from === activeNodeId || e.to === activeNodeId);
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'edge-path' + (isActive ? ' active' : ''));
+    if (e.style === 'dashed') path.setAttribute('stroke-dasharray', '6 4');
+    edgesLayer.appendChild(path);
+
+    // Label
+    if (e.label) {
+      const mx = (from.x + to.x) / 2;
+      const my = (from.y + to.y) / 2 - 8;
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', mx);
+      text.setAttribute('y', my);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('class', 'edge-label' + (isActive ? ' active' : ''));
+      text.textContent = e.label;
+      edgesLayer.appendChild(text);
+    }
+  });
+}
+
+// Deferred render to let nodes get dimensions
+requestAnimationFrame(() => {
+  renderEdges();
+});
+
+// ════════════════════════════════════════════════
+//  INTERACTION
+// ════════════════════════════════════════════════
+
+function selectNode(id) {
+  activeNodeId = id;
+  const node = nodes.find(n => n.id === id);
+
+  // Highlight
+  Object.values(nodeElements).forEach(el => el.classList.remove('active'));
+  nodeElements[id].classList.add('active');
+  renderEdges();
+
+  // Panel
+  panelTitle.textContent = node.label;
+
+  const inEdges = edges.filter(e => e.to === id);
+  const outEdges = edges.filter(e => e.from === id);
+
+  let html = '';
+
+  // Google Doc button
+  html += '<div class="panel-section">';
+  if (node.doc) {
+    html += `<a class="panel-doc-btn" href="${node.doc}" target="_blank" rel="noopener">📄 Ouvrir le Google Doc</a>`;
+  } else {
+    html += `<button class="panel-doc-btn disabled" title="Aucun Google Doc lié pour ce node">📄 Aucun Google Doc lié</button>`;
+  }
+  html += '</div>';
+
+  // Meta fields
+  if (node.meta) {
+    html += '<div class="panel-section"><div class="panel-section-title">Détails</div>';
+    Object.entries(node.meta).forEach(([k, v]) => {
+      html += `<div class="panel-field"><span class="panel-field-label">${k}</span><span class="panel-field-value">${v}</span></div>`;
+    });
+    html += '</div>';
+  }
+
+  // Connections
+  if (inEdges.length || outEdges.length) {
+    html += '<div class="panel-section"><div class="panel-section-title">Connexions</div><ul class="panel-connections">';
+    inEdges.forEach(e => {
+      const src = nodes.find(n => n.id === e.from);
+      html += `<li><span class="conn-dir in">entrée</span> <span>${src.label}</span> <span style="color:var(--text-dim);font-size:11px">(${e.label})</span></li>`;
+    });
+    outEdges.forEach(e => {
+      const tgt = nodes.find(n => n.id === e.to);
+      html += `<li><span class="conn-dir out">sortie</span> <span>${tgt.label}</span> <span style="color:var(--text-dim);font-size:11px">(${e.label})</span></li>`;
+    });
+    html += '</ul></div>';
+  }
+
+  panelBody.innerHTML = html;
+  panel.classList.add('open');
+}
+
+document.getElementById('panelClose').addEventListener('click', () => {
+  panel.classList.remove('open');
+  activeNodeId = null;
+  Object.values(nodeElements).forEach(el => el.classList.remove('active'));
+  renderEdges();
+});
+
+document.getElementById('canvasContainer').addEventListener('click', () => {
+  panel.classList.remove('open');
+  activeNodeId = null;
+  Object.values(nodeElements).forEach(el => el.classList.remove('active'));
+  renderEdges();
+});
+
+// ════════════════════════════════════════════════
+//  PAN & ZOOM
+// ════════════════════════════════════════════════
+
+let scale = 1;
+let panX = 0, panY = -100;
+let isPanning = false;
+let startX, startY;
+
+function applyTransform() {
+  canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+  document.getElementById('zoomLevel').textContent = Math.round(scale * 100) + '%';
+}
+applyTransform();
+
+const container = document.getElementById('canvasContainer');
+
+container.addEventListener('mousedown', (e) => {
+  if (e.target.closest('.node')) return;
+  isPanning = true;
+  startX = e.clientX - panX;
+  startY = e.clientY - panY;
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (!isPanning) return;
+  panX = e.clientX - startX;
+  panY = e.clientY - startY;
+  applyTransform();
+});
+
+window.addEventListener('mouseup', () => { isPanning = false; });
+
+container.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? -0.08 : 0.08;
+  scale = Math.min(2, Math.max(0.3, scale + delta));
+  applyTransform();
+}, { passive: false });
+
+document.getElementById('zoomIn').addEventListener('click', () => {
+  scale = Math.min(2, scale + 0.15);
+  applyTransform();
+});
+document.getElementById('zoomOut').addEventListener('click', () => {
+  scale = Math.max(0.3, scale - 0.15);
+  applyTransform();
+});
+document.getElementById('zoomFit').addEventListener('click', () => {
+  scale = 0.75; panX = 40; panY = -60;
+  applyTransform();
+});
+</script>
+</body>
+</html>
