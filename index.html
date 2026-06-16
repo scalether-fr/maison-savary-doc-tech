@@ -135,10 +135,10 @@
   .node[data-type="storage"] .node-type { color: var(--storage-color); }
   .node[data-type="output"] .node-type { color: var(--output-color); }
 
-  .node[data-type="source"] { border-left: 3px solid var(--source-color); background: var(--source-bg); }
-  .node[data-type="script"] { border-left: 3px solid var(--script-color); background: var(--script-bg); }
-  .node[data-type="storage"] { border-left: 3px solid var(--storage-color); background: var(--storage-bg); }
-  .node[data-type="output"] { border-left: 3px solid var(--output-color); background: var(--output-bg); }
+  .node[data-type="source"] { border-left: 3px solid var(--source-color); background: linear-gradient(var(--source-bg), var(--source-bg)), var(--surface); }
+  .node[data-type="script"] { border-left: 3px solid var(--script-color); background: linear-gradient(var(--script-bg), var(--script-bg)), var(--surface); }
+  .node[data-type="storage"] { border-left: 3px solid var(--storage-color); background: linear-gradient(var(--storage-bg), var(--storage-bg)), var(--surface); }
+  .node[data-type="output"] { border-left: 3px solid var(--output-color); background: linear-gradient(var(--output-bg), var(--output-bg)), var(--surface); }
 
   .node-name {
     font-size: 14px; font-weight: 600;
@@ -545,6 +545,8 @@ const edges = [
   { from: 'pourdebon', to: 'gas_pnl', label: 'ventes (API)' },
   { from: 'gas_pnl', to: 'sheet_pnl', label: 'construction' },
   { from: 'sheet_pnl', to: 'pnl_display', label: 'snapshot valeurs', style: 'dashed' },
+  { from: 'sheets_prod', to: 'sheet_pnl', label: 'production' },
+  { from: 'sheets_ventes', to: 'sheet_pnl', label: 'ventes' },
 ];
 
 // ════════════════════════════════════════════════
