@@ -25,6 +25,8 @@
     --script-bg: #6c9ef818;
     --storage-bg: #4ecba018;
     --output-bg: #c678dd18;
+    --storagescript-color: #5db4cc;
+    --storagescript-bg: #5db4cc18;
 
     --edge-default: #3a3e50;
     --edge-active: #6c9ef8;
@@ -134,11 +136,13 @@
   .node[data-type="script"] .node-type { color: var(--script-color); }
   .node[data-type="storage"] .node-type { color: var(--storage-color); }
   .node[data-type="output"] .node-type { color: var(--output-color); }
+  .node[data-type="storagescript"] .node-type { color: var(--storagescript-color); }
 
   .node[data-type="source"] { border-left: 3px solid var(--source-color); background: linear-gradient(var(--source-bg), var(--source-bg)), var(--surface); }
   .node[data-type="script"] { border-left: 3px solid var(--script-color); background: linear-gradient(var(--script-bg), var(--script-bg)), var(--surface); }
   .node[data-type="storage"] { border-left: 3px solid var(--storage-color); background: linear-gradient(var(--storage-bg), var(--storage-bg)), var(--surface); }
   .node[data-type="output"] { border-left: 3px solid var(--output-color); background: linear-gradient(var(--output-bg), var(--output-bg)), var(--surface); }
+  .node[data-type="storagescript"] { border-left: 3px solid var(--storagescript-color); background: linear-gradient(var(--storagescript-bg), var(--storagescript-bg)), var(--surface); }
 
   .node-name {
     font-size: 14px; font-weight: 600;
@@ -282,6 +286,7 @@
     <div class="legend-item"><div class="legend-dot" style="background:var(--script-color)"></div>Script (GAS)</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--storage-color)"></div>Stockage</div>
     <div class="legend-item"><div class="legend-dot" style="background:var(--output-color)"></div>Restitution</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--storagescript-color)"></div>Stockage + script</div>
   </div>
 </div>
 
@@ -483,35 +488,36 @@ const nodes = [
       'Type': 'Marketplace B2C',
       'Périmètre': 'Commandes des particuliers',
       'Accès': 'API REST (token, sans Bearer)',
-      'Consommé par': 'Scripts P&L (sync ventes)'
+      'Consommé par': 'Script Pour de Bon'
     }
   },
   {
-    id: 'gas_pnl',
+    id: 'script_pdb',
     type: 'script',
-    label: 'Scripts P&L',
-    desc: 'Sync recettes/ventes + construction du P&L',
+    label: 'Script Pour de Bon',
+    desc: 'Sync des ventes en ligne',
     x: 380, y: 760,
     doc: 'https://docs.google.com/document/d/1csVWzFLy6XeTWuvQ2RghdpQFzm0mcQPuhiRGbVqWRz0/edit',
     meta: {
-      'Langage': 'Google Apps Script (container-bound)',
-      'Scripts': 'Recettes HH, Éclatement, Ventes Pour de Bon, Construction P&L, 12 mois glissants',
-      'Déclenchement': 'Menu « Mise à jour » + triggers temporels',
-      'Objectif': 'Marge mensuelle par produit × canal × secteur'
+      'Langage': 'Google Apps Script',
+      'Fonction': 'Récupère les commandes Pour de Bon (API) et les écrit dans le sheet Ventes',
+      'Format': 'Identique aux autres ventes (HT)',
+      'Déclenchement': 'Menu « Mise à jour » + trigger temporel'
     }
   },
   {
-    id: 'sheet_pnl',
-    type: 'storage',
+    id: 'construction_pnl',
+    type: 'storagescript',
     label: 'Construction P&L',
-    desc: 'Fichier de calcul (29 onglets)',
+    desc: 'Fichier de calcul + scripts (29 onglets)',
     x: 680, y: 760,
     doc: 'https://docs.google.com/document/d/1csVWzFLy6XeTWuvQ2RghdpQFzm0mcQPuhiRGbVqWRz0/edit',
     meta: {
-      'Type': 'Google Sheets',
+      'Type': 'Google Sheets + Apps Script (container-bound)',
+      'Scripts': 'Recettes HH, Éclatement, MAJ vue du mois, 12 mois glissants',
+      'Déclenchement': 'Menu « Mise à jour » + triggers temporels',
       'Contenu': 'Recettes, coûts, ventes, P&L par produit',
-      'Alimentation': 'Scripts P&L',
-      'Restitution': 'Snapshot valeurs vers fichier Display'
+      'Restitution': 'Snapshot valeurs vers Tableaux de bord P&L'
     }
   },
   {
@@ -541,12 +547,12 @@ const edges = [
   { from: 'sheets_ventes', to: 'bigquery', label: 'table externe' },
   { from: 'sheets_prod', to: 'bigquery', label: 'table externe' },
   { from: 'bigquery', to: 'looker', label: 'vues SQL' },
-  { from: 'helloharel', to: 'gas_pnl', label: 'recettes & coûts' },
-  { from: 'pourdebon', to: 'gas_pnl', label: 'ventes (API)' },
-  { from: 'gas_pnl', to: 'sheet_pnl', label: 'construction' },
-  { from: 'sheet_pnl', to: 'pnl_display', label: 'snapshot valeurs', style: 'dashed' },
-  { from: 'sheets_prod', to: 'sheet_pnl', label: 'production' },
-  { from: 'sheets_ventes', to: 'sheet_pnl', label: 'ventes' },
+  { from: 'helloharel', to: 'construction_pnl', label: 'recettes & coûts' },
+  { from: 'pourdebon', to: 'script_pdb', label: 'commandes (API)' },
+  { from: 'script_pdb', to: 'sheets_ventes', label: 'écrit' },
+  { from: 'sheets_prod', to: 'construction_pnl', label: 'production' },
+  { from: 'sheets_ventes', to: 'construction_pnl', label: 'ventes' },
+  { from: 'construction_pnl', to: 'pnl_display', label: 'snapshot valeurs', style: 'dashed' },
 ];
 
 // ════════════════════════════════════════════════
@@ -571,7 +577,7 @@ nodes.forEach(n => {
   el.style.left = n.x + 'px';
   el.style.top = n.y + 'px';
   el.innerHTML = `
-    <div class="node-type">${n.type === 'source' ? 'source erp' : n.type === 'script' ? 'script gas' : n.type === 'storage' ? 'stockage' : 'restitution'}</div>
+    <div class="node-type">${n.type === 'source' ? 'source erp' : n.type === 'script' ? 'script gas' : n.type === 'storage' ? 'stockage' : n.type === 'storagescript' ? 'stockage + script' : 'restitution'}</div>
     <div class="node-name">${n.label}</div>
     <div class="node-desc">${n.desc}</div>
     ${n.doc ? '<div class="node-doc-indicator" title="Google Doc lié">↗</div>' : ''}
