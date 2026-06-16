@@ -488,19 +488,18 @@ const nodes = [
       'Type': 'Marketplace B2C',
       'Périmètre': 'Commandes des particuliers',
       'Accès': 'API REST (token, sans Bearer)',
-      'Consommé par': 'Script Pour de Bon'
+      'Consommé par': 'Construction P&L (script intégré)'
     }
   },
   {
-    id: 'script_pdb',
+    id: 'script_hh_ventes',
     type: 'script',
-    label: 'Script Pour de Bon',
-    desc: 'Sync des ventes en ligne',
-    x: 380, y: 760,
-    doc: 'https://docs.google.com/document/d/1csVWzFLy6XeTWuvQ2RghdpQFzm0mcQPuhiRGbVqWRz0/edit',
+    label: 'Script Hello Harel',
+    desc: 'Sync des ventes Hello Harel',
+    x: 380, y: 260,
     meta: {
       'Langage': 'Google Apps Script',
-      'Fonction': 'Récupère les commandes Pour de Bon (API) et les écrit dans le sheet Ventes',
+      'Fonction': 'Récupère les ventes Hello Harel et les écrit dans le sheet Ventes',
       'Format': 'Identique aux autres ventes (HT)',
       'Déclenchement': 'Menu « Mise à jour » + trigger temporel'
     }
@@ -548,8 +547,9 @@ const edges = [
   { from: 'sheets_prod', to: 'bigquery', label: 'table externe' },
   { from: 'bigquery', to: 'looker', label: 'vues SQL' },
   { from: 'helloharel', to: 'construction_pnl', label: 'recettes & coûts' },
-  { from: 'pourdebon', to: 'script_pdb', label: 'commandes (API)' },
-  { from: 'script_pdb', to: 'sheets_ventes', label: 'écrit' },
+  { from: 'pourdebon', to: 'construction_pnl', label: 'commandes (API)' },
+  { from: 'helloharel', to: 'script_hh_ventes', label: 'ventes (API)' },
+  { from: 'script_hh_ventes', to: 'sheets_ventes', label: 'écrit' },
   { from: 'sheets_prod', to: 'construction_pnl', label: 'production' },
   { from: 'sheets_ventes', to: 'construction_pnl', label: 'ventes' },
   { from: 'construction_pnl', to: 'pnl_display', label: 'snapshot valeurs', style: 'dashed' },
