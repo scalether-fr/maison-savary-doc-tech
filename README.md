@@ -4,7 +4,7 @@ Cartographie interactive des automatisations et flux de données mis en place ch
 
 ## Accès
 
-- Page publiée : https://clement-scalether.github.io/maison-savary-doc-tech/
+- Page publiée : https://scalether-fr.github.io/maison-savary-doc-tech/
 - Le détail métier (specs, configs, accès) reste dans les Google Docs du Drive Maison Savary, liés depuis chaque node.
 
 ## Édition
