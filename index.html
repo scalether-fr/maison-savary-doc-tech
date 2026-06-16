@@ -471,6 +471,61 @@ const nodes = [
       'Utilisateur': 'Paul Burckart',
       'Statut': 'Livré'
     }
+  },
+  // ── P&L (Construction P&L — Apps Script) ──
+  {
+    id: 'pourdebon',
+    type: 'source',
+    label: 'Pour de Bon',
+    desc: 'Marketplace vente en ligne (B2C)',
+    x: 80, y: 760,
+    meta: {
+      'Type': 'Marketplace B2C',
+      'Périmètre': 'Commandes des particuliers',
+      'Accès': 'API REST (token, sans Bearer)',
+      'Consommé par': 'Scripts P&L (sync ventes)'
+    }
+  },
+  {
+    id: 'gas_pnl',
+    type: 'script',
+    label: 'Scripts P&L',
+    desc: 'Sync recettes/ventes + construction du P&L',
+    x: 380, y: 760,
+    doc: 'https://docs.google.com/document/d/1csVWzFLy6XeTWuvQ2RghdpQFzm0mcQPuhiRGbVqWRz0/edit',
+    meta: {
+      'Langage': 'Google Apps Script (container-bound)',
+      'Scripts': 'Recettes HH, Éclatement, Ventes Pour de Bon, Construction P&L, 12 mois glissants',
+      'Déclenchement': 'Menu « Mise à jour » + triggers temporels',
+      'Objectif': 'Marge mensuelle par produit × canal × secteur'
+    }
+  },
+  {
+    id: 'sheet_pnl',
+    type: 'storage',
+    label: 'Construction P&L',
+    desc: 'Fichier de calcul (29 onglets)',
+    x: 680, y: 760,
+    doc: 'https://docs.google.com/document/d/1csVWzFLy6XeTWuvQ2RghdpQFzm0mcQPuhiRGbVqWRz0/edit',
+    meta: {
+      'Type': 'Google Sheets',
+      'Contenu': 'Recettes, coûts, ventes, P&L par produit',
+      'Alimentation': 'Scripts P&L',
+      'Restitution': 'Snapshot valeurs vers fichier Display'
+    }
+  },
+  {
+    id: 'pnl_display',
+    type: 'output',
+    label: 'Display P&L',
+    desc: 'Consultation & tableaux de bord',
+    x: 980, y: 760,
+    meta: {
+      'Type': 'Google Sheets (restitution)',
+      'Contenu': 'Copie figée du P&L + TDB produit/canal/client',
+      'Source': 'Construction P&L (snapshot valeurs)',
+      'Vue': '12 mois glissants'
+    }
   }
 ];
 
@@ -486,6 +541,10 @@ const edges = [
   { from: 'sheets_ventes', to: 'bigquery', label: 'table externe' },
   { from: 'sheets_prod', to: 'bigquery', label: 'table externe' },
   { from: 'bigquery', to: 'looker', label: 'vues SQL' },
+  { from: 'helloharel', to: 'gas_pnl', label: 'recettes & coûts' },
+  { from: 'pourdebon', to: 'gas_pnl', label: 'ventes (API)' },
+  { from: 'gas_pnl', to: 'sheet_pnl', label: 'construction' },
+  { from: 'sheet_pnl', to: 'pnl_display', label: 'snapshot valeurs', style: 'dashed' },
 ];
 
 // ════════════════════════════════════════════════
