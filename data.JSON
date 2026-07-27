@@ -1,0 +1,853 @@
+{
+  "meta": {
+    "titre": "Cartographie des flux",
+    "sous_titre": "Maison Savary — pilotage data",
+    "version": 2,
+    "genere_le": "2026-07-27",
+    "note": "Source de vérité de la carte. Editer ce fichier (nodes / edges) suffit, le visualiseur ne bouge pas."
+  },
+  "domaines": [
+    { "id": "production", "label": "Production", "color": "#6c9ef8" },
+    { "id": "achats", "label": "Achats MP", "color": "#e8913a" },
+    { "id": "ventes", "label": "Ventes", "color": "#c678dd" },
+    { "id": "tresorerie", "label": "Trésorerie", "color": "#4ecba0" },
+    { "id": "transverse", "label": "Transverse", "color": "#8b8fa3" }
+  ],
+  "types": [
+    { "id": "source", "label": "Source externe (ERP / API)" },
+    { "id": "saisie", "label": "Saisie manuelle (humain)" },
+    { "id": "library", "label": "Librairie GAS" },
+    { "id": "script", "label": "Script GAS" },
+    { "id": "storage", "label": "Stockage (Sheets / BQ table)" },
+    { "id": "traitement", "label": "Traitement (vue BQ)" },
+    { "id": "output", "label": "Restitution" }
+  ],
+  "nodes": [
+    {
+      "id": "popina",
+      "type": "source",
+      "label": "Popina",
+      "desc": "POS / caisse multi-PDV",
+      "domain": "ventes",
+      "layer": 0,
+      "order": 30,
+      "meta": {
+        "Type": "ERP POS, pas d'API (scraping HTTP)",
+        "Accès": "Session cookie + CSRF",
+        "PDV": "17728 Ermont, 17729 Isle-A, 17730 Domont, 22862 Usine16, 29747 Levallois",
+        "Particularité": "macro_names chargés en AJAX (statistics_all_categories_data), absents du HTML statique"
+      },
+      "todo": [
+        "Migration backoffice Popina annoncée. Si URLs ou structure HTML changent : adapter scrapeExportParams_, fetchMacroNames_ et l'endpoint d'export.",
+        "Si les macro_names ne sont pas repris dans le payload, les catégories concernées sont silencieusement exclues (sous-comptage du CA). Nommage incohérent entre PDV (FLAN / Flan / FLANS)."
+      ]
+    },
+    {
+      "id": "helloharel",
+      "type": "source",
+      "label": "Hello Harel",
+      "desc": "ERP production / ventes / achats",
+      "domain": "transverse",
+      "layer": 0,
+      "order": 10,
+      "meta": {
+        "Type": "ERP, API REST + export via login scrapé",
+        "Base": "https://maison-savary.helloharel.com",
+        "Endpoints": "/api/v1/products (référentiel), order_journal (achats, ventes), production_orders (OF)",
+        "Particularité": "SKU avec espaces / tirets qui cassent les regex joins BQ, à normaliser côté HH"
+      }
+    },
+    {
+      "id": "pourdebon",
+      "type": "source",
+      "label": "Pour de Bon",
+      "desc": "Marketplace B2C",
+      "domain": "ventes",
+      "layer": 0,
+      "order": 40,
+      "meta": {
+        "Type": "Marketplace, API REST (token sans Bearer)",
+        "Périmètre": "Commandes particuliers"
+      },
+      "todo": [
+        "Script Pour de Bon non cartographié : documenter endpoints, écritures (onglet BDD Ventes PdB, table facturation_pour_de_bon) et déclenchement."
+      ]
+    },
+    {
+      "id": "agicap",
+      "type": "source",
+      "label": "Agicap",
+      "desc": "Trésorerie",
+      "domain": "tresorerie",
+      "layer": 0,
+      "order": 50,
+      "meta": {
+        "Type": "API privée, OAuth2 + PKCE",
+        "Entity ID Savary": "148404",
+        "Export": "ExportExcelSimple (XLSX)"
+      }
+    },
+    {
+      "id": "saisie_rh",
+      "type": "saisie",
+      "label": "Saisie RH (Julien)",
+      "desc": "Effectifs / ETP par semaine",
+      "domain": "production",
+      "layer": 0,
+      "order": 20,
+      "meta": {
+        "Contenu": "ETP par secteur et par semaine (onglet DB_effectifs)",
+        "Auteur": "Julien, manuel",
+        "Règle semaine courte": "prorata 5j x 4/5, dénominateur constant = 5"
+      }
+    },
+    {
+      "id": "mapping_secteurs",
+      "type": "saisie",
+      "label": "Mapping secteurs",
+      "desc": "Catégorie → secteur (trame_secteurs)",
+      "domain": "production",
+      "layer": 0,
+      "order": 22,
+      "meta": {
+        "Contenu": "Affectation manuelle catégorie Hello Harel → Pain / Patisserie / Emballage",
+        "Support": "Onglet trame_secteurs du fichier effectifs, listing des catégories via onglet ordres_production (sync BQ)"
+      },
+      "todo": [
+        "URGENT, repenser cette logique. Le listing des catégories (onglet ordres_production) sert de base à l'affectation, mais les lignes bougent : l'affectation par position se désaligne dès qu'une catégorie apparaît ou disparaît. Passer à une clé stable (nom de catégorie) plutôt qu'une position de ligne."
+      ]
+    },
+    {
+      "id": "param_alertes",
+      "type": "saisie",
+      "label": "Paramétrage alertes",
+      "desc": "Seuils + destinataires",
+      "domain": "achats",
+      "layer": 0,
+      "order": 60,
+      "meta": {
+        "Contenu": "Seuils veille / critique (spot + annuel) et listes d'emails",
+        "Support": "Onglet Paramétrage du fichier Suivi coûts MP (gid 0)"
+      }
+    },
+    {
+      "id": "prix_manuels",
+      "type": "saisie",
+      "label": "Prix / produits manuels",
+      "desc": "Hors référentiel HH",
+      "domain": "ventes",
+      "layer": 0,
+      "order": 45,
+      "meta": {
+        "Contenu": "Produits non référencés en achat (eau, film plastique, etc.) et prix associés",
+        "Support": "Onglet Mercuriales MP du Simulateur"
+      }
+    },
+    {
+      "id": "lib_exporthh",
+      "type": "library",
+      "label": "ExportHH",
+      "desc": "Librairie export Hello Harel",
+      "domain": "transverse",
+      "layer": 1,
+      "order": 10,
+      "links": [
+        { "label": "Ouvrir la librairie", "url": "https://drive.google.com/open?id=12Ply7gdKt3j2XqrLZahIZJKnVBx5v2XHkyXPwGxxynnq9fBzBjIeeEM0" }
+      ],
+      "meta": {
+        "Fonctions": "getExport (login, filtre dates, trigger, download avec polling), getSession, retryDownload",
+        "Consommée par": "coûts achats MP, Production, export ventes",
+        "Fragilité": "downloadExport_ boucle sur un test de format. Un changement de structure HH peut renvoyer un blob valide mais incomplet."
+      }
+    },
+    {
+      "id": "lib_agicap",
+      "type": "library",
+      "label": "ExportAgicap",
+      "desc": "Librairie export Agicap",
+      "domain": "tresorerie",
+      "layer": 1,
+      "order": 50,
+      "links": [
+        { "label": "Ouvrir la librairie", "url": "https://drive.google.com/open?id=1trdXiybdXuyVeBR5NXDwsZXEY5w0Bt5HepHlgQ6tslruHDBsWtK26Yfc" }
+      ],
+      "meta": {
+        "Fonctions": "getExportAgicap (OAuth2 + PKCE), help",
+        "Consommée par": "export ventes Agicap"
+      }
+    },
+    {
+      "id": "scr_ref_produits",
+      "type": "script",
+      "label": "Référentiel produits",
+      "desc": "Import catalogue HH",
+      "domain": "transverse",
+      "layer": 2,
+      "order": 10,
+      "links": [
+        { "label": "Ouvrir le script", "url": "https://drive.google.com/open?id=1sCieJOOk9ZZyuGH_Ee_xww4pVfeQr7ILdGPe1_FDvWc" }
+      ],
+      "meta": {
+        "Fonction": "importProducts, appel direct API /api/v1/products (pagination), dédup par code, alerte doublons par email",
+        "Déclenchement": "Hebdomadaire (lundi)",
+        "Dépendance": "Aucune librairie (API directe)",
+        "Écrit vers": "Onglet BDD du fichier Référentiel produits"
+      }
+    },
+    {
+      "id": "scr_couts_mp",
+      "type": "script",
+      "label": "Coûts achats MP",
+      "desc": "export.gs + monitoring.gs + alert.gs",
+      "domain": "achats",
+      "layer": 2,
+      "order": 60,
+      "links": [
+        { "label": "Ouvrir le script", "url": "https://drive.google.com/open?id=1DfTAg0vTKUC5A1mvydRJpZX4QcOhQM7nHVGgyOvYmgALQLY5dLZGtGDj" }
+      ],
+      "meta": {
+        "Fonction": "exportCommandesHH, journal des commandes MP de J-1, écriture Sheets + BQ, puis contrôle des hausses de prix et alerting veille / critique",
+        "Déclenchement": "Quotidien",
+        "Dépendance": "ExportHH",
+        "Écrit vers": "Suivi coûts MP (Historique), BQ commandes_MP, emails d'alerte"
+      },
+      "todo": [
+        "Statuts filtrés en liste noire (order_status !== 'Cancelled'). Recommandé : liste blanche (Issued / Done ou Validated) pour ne pas ingérer un statut inattendu.",
+        "insertBlobToBigQuery sans garde de schéma : un décalage de colonnes passe en silence. Ajouter un contrôle position / nom comme alignRowsToFields_ du script Production."
+      ]
+    },
+    {
+      "id": "scr_production",
+      "type": "script",
+      "label": "Production",
+      "desc": "Extraction OF Hello Harel",
+      "domain": "production",
+      "layer": 2,
+      "order": 20,
+      "links": [
+        { "label": "Ouvrir le script", "url": "https://drive.google.com/open?id=1ls2pYyMFTSt8a0V_iwLIvor40jr8066O7XWM92Xc9pcHwhiHHvfAuOaQ" }
+      ],
+      "meta": {
+        "Fonction": "exportProductionHH, filtre status=Done, dédup par référence OF, classification PRODUCTION / TRANSFERT_SURGELE / TRANSFERT_FRAIS via appels détail OF",
+        "Déclenchement": "Planifié",
+        "Dépendance": "ExportHH",
+        "Contrat de structure": "Le schéma BQ fait foi, alignRowsToFields_ lève si une colonne attendue manque",
+        "Ordre d'écriture": "BQ d'abord, Sheets seulement si succès (Sheets = source de dédup)"
+      }
+    },
+    {
+      "id": "scr_ventes_hh",
+      "type": "script",
+      "label": "Export ventes HH",
+      "desc": "Journal des ventes",
+      "domain": "ventes",
+      "layer": 2,
+      "order": 30,
+      "links": [
+        { "label": "Ouvrir le script", "url": "https://drive.google.com/open?id=1gHDb035f3ij7W-798nzRQH3ME7sRLzYB9DjsI6H79klBihsKMnT2h9KM" }
+      ],
+      "meta": {
+        "Fonction": "exportVentesHH, filtre status=Validated, mécanisme de retry (trigger différé) si export pas prêt",
+        "Déclenchement": "Planifié",
+        "Dépendance": "ExportHH",
+        "Écrit vers": "Suivi des ventes (BDD), BQ ordres_ventes (WRITE_TRUNCATE)"
+      },
+      "todo": [
+        "Vérifier la liaison CSV vers BQ sur un champ quantité (INT64 vs NUMERIC). Exporter la table BQ sur Sheets, comparer à la version Sheets native, repérer l'écart, corriger le typage."
+      ]
+    },
+    {
+      "id": "scr_popina",
+      "type": "script",
+      "label": "Export ventes Popina",
+      "desc": "Suivi mensuel multi-PDV",
+      "domain": "ventes",
+      "layer": 2,
+      "order": 40,
+      "links": [
+        { "label": "Ouvrir le script", "url": "https://drive.google.com/open?id=1li11pKqK2Mosy6VK0yEH4NEYfdEAcuZo_MiF5bWqrdn2VHH2xU_cyKlm" }
+      ],
+      "meta": {
+        "Fonction": "exportLastMonth, login, scrape des filtres dynamiques, download XLSX par PDV, un onglet par PDV puis consolidation",
+        "Déclenchement": "Mensuel",
+        "Dépendance": "Aucune (scraping intégré)",
+        "Écrit vers": "Popina ventes mensuelles (onglets PDV + BDD consolidé)"
+      }
+    },
+    {
+      "id": "scr_agicap",
+      "type": "script",
+      "label": "Export ventes Agicap",
+      "desc": "Trésorerie vers Sheets + BQ",
+      "domain": "tresorerie",
+      "layer": 2,
+      "order": 50,
+      "links": [
+        { "label": "Ouvrir le script", "url": "https://drive.google.com/open?id=1SWf3ubUouEebLsid28WRBU5YVwf8Lvq5MZIvKlhCozVlwnAPMeJUqxmR" }
+      ],
+      "meta": {
+        "Fonction": "exportAgicap, parsing et nettoyage du XLSX, écrasement Sheets + BQ",
+        "Déclenchement": "Planifié",
+        "Dépendance": "ExportAgicap",
+        "Écrit vers": "Sheet Agicap, BQ agicap (WRITE_TRUNCATE)"
+      }
+    },
+    {
+      "id": "scr_pourdebon",
+      "type": "script",
+      "label": "Pipeline Pour de Bon",
+      "desc": "À cartographier",
+      "domain": "ventes",
+      "layer": 2,
+      "order": 45,
+      "meta": {
+        "Statut": "Script non fourni, présence déduite (onglet BDD Ventes PdB, table facturation_pour_de_bon)"
+      },
+      "todo": [
+        "Récupérer le script Pour de Bon : endpoints, cibles d'écriture, déclenchement. Node placeholder en attendant."
+      ]
+    },
+    {
+      "id": "scr_simulateur",
+      "type": "script",
+      "label": "Scripts Simulateur",
+      "desc": "Sidebar recettes",
+      "domain": "ventes",
+      "layer": 2,
+      "order": 47,
+      "links": [
+        { "label": "Documentation", "url": "https://docs.google.com/document/d/1-oWzyZZhX2-Y1ZmI8DoVNCqDu7KvsnbX1sccHwaqnKg/edit" }
+      ],
+      "meta": {
+        "Fonction": "UI sidebar HTML pour consulter / créer / éditer les recettes, lecture des onglets BDD",
+        "Déclenchement": "À la demande",
+        "Utilisateur": "Paul Burckart"
+      }
+    },
+    {
+      "id": "sh_effectifs",
+      "type": "storage",
+      "label": "Effectifs production",
+      "desc": "RH + mapping secteurs",
+      "domain": "production",
+      "layer": 3,
+      "order": 20,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1zZ_7Tk0aloIjwl3M03weFZUPmLNuSNffP4aSKfEufUI" }
+      ],
+      "meta": {
+        "ID": "1zZ_7Tk0aloIjwl3M03weFZUPmLNuSNffP4aSKfEufUI",
+        "Onglets": "DB_effectifs (ETP), trame_secteurs (mapping), ordres_production (listing catégories)",
+        "Alimentation": "Saisie manuelle (Julien) + sync BQ pour le listing",
+        "Consommé par": "BQ source_sheet_rh et source_sheet_mapping_secteurs"
+      }
+    },
+    {
+      "id": "sh_ref_produits",
+      "type": "storage",
+      "label": "Référentiel produits",
+      "desc": "Catalogue HH consolidé",
+      "domain": "transverse",
+      "layer": 3,
+      "order": 10,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1sCieJOOk9ZZyuGH_Ee_xww4pVfeQr7ILdGPe1_FDvWc" }
+      ],
+      "meta": {
+        "ID": "1sCieJOOk9ZZyuGH_Ee_xww4pVfeQr7ILdGPe1_FDvWc",
+        "Onglet": "BDD (id, code, label, category, packaging_weight, etc.)",
+        "Alimentation": "Script Référentiel produits (container-bound)",
+        "Consommé par": "BQ products"
+      }
+    },
+    {
+      "id": "sh_couts_mp",
+      "type": "storage",
+      "label": "Suivi coûts MP",
+      "desc": "Historique + référentiel prix",
+      "domain": "achats",
+      "layer": 3,
+      "order": 60,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1nu-HanUUD_ras218H4t0B979zVvKCPJ40-YLmlJZk4U" }
+      ],
+      "meta": {
+        "ID": "1nu-HanUUD_ras218H4t0B979zVvKCPJ40-YLmlJZk4U",
+        "Onglets": "Paramétrage (gid 0), Historique commandes (gid 2087942678), Référentiel prix (gid 768764514)",
+        "Alimentation": "Script coûts achats MP (Historique) + saisie (Paramétrage)",
+        "Consommé par": "Simulateur (IMPORTRANGE), monitoring des prix"
+      }
+    },
+    {
+      "id": "sh_production",
+      "type": "storage",
+      "label": "Suivi production",
+      "desc": "OF + extrait P&L",
+      "domain": "production",
+      "layer": 3,
+      "order": 25,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/12usaOi5e241jGG-JAxAfRH6-xtrtO9Q9sdNz9T1lOE4" }
+      ],
+      "meta": {
+        "ID": "12usaOi5e241jGG-JAxAfRH6-xtrtO9Q9sdNz9T1lOE4",
+        "Onglets": "BDD (OF), export P&L (QUERY 12 mois glissants)",
+        "Alimentation": "Script Production",
+        "Consommé par": "BQ ordres_production, Construction P&L"
+      }
+    },
+    {
+      "id": "sh_recettes",
+      "type": "storage",
+      "label": "Suivi coûts recettes",
+      "desc": "Recettes + coûts (Simulateur)",
+      "domain": "ventes",
+      "layer": 3,
+      "order": 47,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/15rqrlzAuUqes1YciFfeiO2mKFnPlT2GSHj9ov87Z-Lc" }
+      ],
+      "meta": {
+        "ID": "15rqrlzAuUqes1YciFfeiO2mKFnPlT2GSHj9ov87Z-Lc",
+        "Onglets": "Mercuriales MP (IMPORTRANGE prix), BDD produits intermédiaires, BDD (recettes)",
+        "Alimentation": "IMPORTRANGE Suivi coûts MP + saisie manuelle + scripts",
+        "Consommé par": "Simulateur UI"
+      }
+    },
+    {
+      "id": "sh_popina",
+      "type": "storage",
+      "label": "Popina ventes mensuelles",
+      "desc": "Par PDV + consolidé",
+      "domain": "ventes",
+      "layer": 3,
+      "order": 40,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1N3qc5-4KvY7DyPKycQWKyTwudHLoNRnM3TuGNcJfxk8" }
+      ],
+      "meta": {
+        "ID": "1N3qc5-4KvY7DyPKycQWKyTwudHLoNRnM3TuGNcJfxk8",
+        "Onglets": "Un onglet par PDV, BDD consolidé, export P&L (QUERY 6 mois)",
+        "Alimentation": "Script Export ventes Popina",
+        "Consommé par": "Construction P&L"
+      }
+    },
+    {
+      "id": "sh_ventes_hh",
+      "type": "storage",
+      "label": "Suivi des ventes HH",
+      "desc": "Ventes + P&L + Pour de Bon",
+      "domain": "ventes",
+      "layer": 3,
+      "order": 35,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1nbEQJ9i5BKfDZ1wWtj1ym6-DKwABTNi4Wg82jT79Xt8" }
+      ],
+      "meta": {
+        "ID": "1nbEQJ9i5BKfDZ1wWtj1ym6-DKwABTNi4Wg82jT79Xt8",
+        "Onglets": "BDD (ventes HH), export P&L (QUERY), BDD Ventes PdB (Pour de Bon)",
+        "Alimentation": "Script export ventes HH + pipeline Pour de Bon",
+        "Consommé par": "BQ ordres_ventes, Construction P&L"
+      }
+    },
+    {
+      "id": "sh_agicap",
+      "type": "storage",
+      "label": "Sheet Agicap",
+      "desc": "Réceptacle trésorerie",
+      "domain": "tresorerie",
+      "layer": 3,
+      "order": 50,
+      "links": [
+        { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1Jr2AnrTYg0I14-QisVbnBVi1OOXUjbjFbNG1az0NoJI" }
+      ],
+      "meta": {
+        "ID": "1Jr2AnrTYg0I14-QisVbnBVi1OOXUjbjFbNG1az0NoJI",
+        "Alimentation": "Script Export ventes Agicap (écrasement)"
+      }
+    },
+    {
+      "id": "bq_products",
+      "type": "storage",
+      "label": "products",
+      "desc": "Table BQ (référentiel)",
+      "domain": "transverse",
+      "layer": 4,
+      "order": 10,
+      "meta": {
+        "Type": "BigQuery, table connectée au Sheet Référentiel produits",
+        "Logique clé": "packaging_weight dédupliqué (ROW_NUMBER PARTITION BY code) dans production_kg"
+      }
+    },
+    {
+      "id": "bq_source_rh",
+      "type": "storage",
+      "label": "source_sheet_rh",
+      "desc": "Table BQ (ETP)",
+      "domain": "production",
+      "layer": 4,
+      "order": 20,
+      "meta": {
+        "Type": "BigQuery, table connectée au Sheet effectifs (DB_effectifs)",
+        "Consommé par": "Vue view_effectifs"
+      }
+    },
+    {
+      "id": "bq_mapping_secteurs",
+      "type": "storage",
+      "label": "source_sheet_mapping_secteurs",
+      "desc": "Table BQ (mapping)",
+      "domain": "production",
+      "layer": 4,
+      "order": 22,
+      "meta": {
+        "Type": "BigQuery, table connectée au Sheet effectifs (trame_secteurs)",
+        "Colonnes": "string_field_0 = catégorie, string_field_1 = secteur"
+      }
+    },
+    {
+      "id": "bq_ordres_production",
+      "type": "storage",
+      "label": "ordres_production",
+      "desc": "Table BQ (OF)",
+      "domain": "production",
+      "layer": 4,
+      "order": 24,
+      "meta": {
+        "Type": "BigQuery, chargée par load job",
+        "Alimentation": "Script Production (WRITE_APPEND)"
+      }
+    },
+    {
+      "id": "bq_ordres_ventes",
+      "type": "storage",
+      "label": "ordres_ventes",
+      "desc": "Table BQ (ventes)",
+      "domain": "ventes",
+      "layer": 4,
+      "order": 35,
+      "meta": {
+        "Type": "BigQuery, chargée par load job",
+        "Alimentation": "Script export ventes HH (WRITE_TRUNCATE)"
+      }
+    },
+    {
+      "id": "bq_commandes_mp",
+      "type": "storage",
+      "label": "commandes_MP",
+      "desc": "Table BQ (achats)",
+      "domain": "achats",
+      "layer": 4,
+      "order": 60,
+      "meta": {
+        "Type": "BigQuery, chargée par load job",
+        "Alimentation": "Script coûts achats MP (WRITE_APPEND)"
+      }
+    },
+    {
+      "id": "bq_agicap",
+      "type": "storage",
+      "label": "agicap",
+      "desc": "Table BQ (trésorerie)",
+      "domain": "tresorerie",
+      "layer": 4,
+      "order": 50,
+      "meta": {
+        "Type": "BigQuery, chargée par load job",
+        "Alimentation": "Script Export ventes Agicap (WRITE_TRUNCATE)"
+      }
+    },
+    {
+      "id": "bq_facturation_pdb",
+      "type": "storage",
+      "label": "facturation_pour_de_bon",
+      "desc": "Table BQ (B2C)",
+      "domain": "ventes",
+      "layer": 4,
+      "order": 42,
+      "meta": {
+        "Type": "BigQuery",
+        "Créée le": "24 mars 2026"
+      },
+      "todo": [
+        "Pipeline d'alimentation à documenter (probablement Pour de Bon)."
+      ]
+    },
+    {
+      "id": "bq_crm_data",
+      "type": "storage",
+      "label": "crm_data",
+      "desc": "Table BQ",
+      "domain": "transverse",
+      "layer": 4,
+      "order": 70,
+      "meta": {
+        "Type": "BigQuery",
+        "Créée le": "20 oct. 2025"
+      },
+      "todo": [
+        "Source non documentée. Identifier le pipeline d'alimentation ou marquer obsolète."
+      ]
+    },
+    {
+      "id": "bq_facturation_data",
+      "type": "storage",
+      "label": "Facturation_data",
+      "desc": "Table BQ",
+      "domain": "transverse",
+      "layer": 4,
+      "order": 72,
+      "meta": {
+        "Type": "BigQuery",
+        "Créée le": "20 oct. 2025"
+      },
+      "todo": [
+        "Source non documentée. Identifier le pipeline d'alimentation ou marquer obsolète."
+      ]
+    },
+    {
+      "id": "vw_view_effectifs",
+      "type": "traitement",
+      "label": "view_effectifs",
+      "desc": "Vue BQ (ETP par secteur)",
+      "domain": "production",
+      "layer": 5,
+      "order": 20,
+      "meta": {
+        "Type": "Vue BigQuery",
+        "Logique": "UNION ALL des 3 secteurs (Pâtisserie / Pain / Emballage), SAFE_CAST des ETP virgule vers point, clé code_semaine"
+      }
+    },
+    {
+      "id": "vw_production_kg",
+      "type": "traitement",
+      "label": "production_kg",
+      "desc": "Vue BQ (poids produit)",
+      "domain": "production",
+      "layer": 5,
+      "order": 24,
+      "meta": {
+        "Type": "Vue BigQuery",
+        "Logique": "type_production=PRODUCTION, extraction product_code par regex, JOIN products dédupliqués (packaging_weight), poids_total_kg = quantity x packaging_weight, secteur via mapping",
+        "Piège connu": "SKU avec espaces / tirets cassent le join, doublons produits gonflent le poids (résolus par dédup ROW_NUMBER)"
+      }
+    },
+    {
+      "id": "vw_productivite",
+      "type": "traitement",
+      "label": "productivite_secteur",
+      "desc": "Vue BQ (kg par ETP)",
+      "domain": "production",
+      "layer": 5,
+      "order": 26,
+      "meta": {
+        "Type": "Vue BigQuery",
+        "Logique": "kg par secteur/jour, secteur Emballage = kg-équivalents (kg pondérés par coeff), JOIN view_effectifs, kg_par_etp_jour = total_kg / etp_reel",
+        "Emballage": "CTE coeff_emballage, Pain = 1 (référence), Patisserie = 1.2"
+      },
+      "todo": [
+        "Coeff Emballage Patisserie = 1.2 provisoire. Raisonnement métier : 2 à 3 plus réaliste, à caler sur observation terrain (temps / 100 kg). Seul endroit à modifier = la CTE coeff_emballage.",
+        "ETP des semaines courtes géré manuellement par Julien (prorata 5j x 4/5), dénominateur constant = 5."
+      ]
+    },
+    {
+      "id": "proc_construction_pnl",
+      "type": "traitement",
+      "label": "Construction P&L",
+      "desc": "Sheets + scripts (consolidation)",
+      "domain": "ventes",
+      "layer": 5,
+      "order": 40,
+      "links": [
+        { "label": "Documentation", "url": "https://docs.google.com/document/d/1csVWzFLy6XeTWuvQ2RghdpQFzm0mcQPuhiRGbVqWRz0/edit" }
+      ],
+      "meta": {
+        "Type": "Google Sheets container-bound (scripts)",
+        "Entrées": "Extraits export P&L (ventes HH, Popina, production) + Pour de Bon",
+        "Sortie": "Snapshot valeurs vers Display P&L",
+        "Vue": "12 mois glissants"
+      },
+      "todo": [
+        "Scripts et onglets à détailler (Recettes HH, Éclatement, MAJ vue du mois, 12 mois glissants)."
+      ]
+    },
+    {
+      "id": "out_suivi_production",
+      "type": "output",
+      "label": "Suivi production",
+      "desc": "Dashboard Looker",
+      "domain": "production",
+      "layer": 6,
+      "order": 24,
+      "meta": {
+        "Type": "Looker Studio",
+        "Sources": "production_kg + productivite_secteur",
+        "Utilisateurs": "Direction, Julien",
+        "Piège Looker": "Combo chart limité à 1 métrique avec breakdown, overlay de 2 graphes transparents pour superposer courbe et barres"
+      }
+    },
+    {
+      "id": "out_suivi_couts",
+      "type": "output",
+      "label": "Suivi des coûts",
+      "desc": "Dashboard Looker",
+      "domain": "achats",
+      "layer": 6,
+      "order": 60,
+      "meta": {
+        "Type": "Looker Studio",
+        "Source": "Requête SQL inline sur commandes_MP",
+        "Logique": "dernier prix par product_code + supplier (QUALIFY ROW_NUMBER date DESC)"
+      }
+    },
+    {
+      "id": "out_perf_client",
+      "type": "output",
+      "label": "Performance Client",
+      "desc": "Dashboard Looker",
+      "domain": "ventes",
+      "layer": 6,
+      "order": 35,
+      "meta": {
+        "Type": "Looker Studio",
+        "Statut": "À compléter par Clément"
+      },
+      "todo": [
+        "Sources et logique à documenter (Clément)."
+      ]
+    },
+    {
+      "id": "out_brassards",
+      "type": "output",
+      "label": "Brassards",
+      "desc": "Dashboard Looker",
+      "domain": "transverse",
+      "layer": 6,
+      "order": 72,
+      "meta": {
+        "Type": "Looker Studio",
+        "Statut": "À compléter par Clément"
+      },
+      "todo": [
+        "Sources et logique à documenter (Clément)."
+      ]
+    },
+    {
+      "id": "out_renta",
+      "type": "output",
+      "label": "Suivi renta / Produit",
+      "desc": "Dashboard Looker",
+      "domain": "ventes",
+      "layer": 6,
+      "order": 44,
+      "meta": {
+        "Type": "Looker Studio",
+        "Statut": "À compléter par Clément"
+      },
+      "todo": [
+        "Sources et logique à documenter (Clément)."
+      ]
+    },
+    {
+      "id": "out_simulateur_ui",
+      "type": "output",
+      "label": "Simulateur UI",
+      "desc": "Sidebar recettes",
+      "domain": "ventes",
+      "layer": 6,
+      "order": 47,
+      "meta": {
+        "Type": "Webapp HTML (sidebar)",
+        "Source": "Suivi coûts recettes",
+        "Utilisateur": "Paul Burckart"
+      }
+    },
+    {
+      "id": "out_alertes_prix",
+      "type": "output",
+      "label": "Alertes prix (email)",
+      "desc": "Veille + critique",
+      "domain": "achats",
+      "layer": 6,
+      "order": 62,
+      "meta": {
+        "Type": "Emails HTML",
+        "Source": "Script coûts achats MP (monitoring + alert)",
+        "Niveaux": "veille (orange), critique (rouge), seuils spot + annuel"
+      }
+    },
+    {
+      "id": "out_display_pnl",
+      "type": "output",
+      "label": "Display P&L",
+      "desc": "Tableaux de bord P&L",
+      "domain": "ventes",
+      "layer": 6,
+      "order": 40,
+      "meta": {
+        "Type": "Google Sheets (restitution)",
+        "Source": "Construction P&L (snapshot valeurs)",
+        "Contenu": "P&L figé + TDB produit / canal / client, 12 mois glissants"
+      }
+    }
+  ],
+  "edges": [
+    { "from": "helloharel", "to": "lib_exporthh", "transport": "scrape + export", "payload": "exports paramétrables (commandes, production, ventes)", "format": "CSV / XLSX", "trigger": "à chaque appel" },
+    { "from": "helloharel", "to": "scr_ref_produits", "transport": "API REST", "payload": "catalogue produits", "format": "JSON", "trigger": "hebdo (lundi)" },
+    { "from": "agicap", "to": "lib_agicap", "transport": "OAuth2 + PKCE", "payload": "export trésorerie", "format": "XLSX", "trigger": "à chaque appel" },
+    { "from": "popina", "to": "scr_popina", "transport": "scrape HTTP", "payload": "CA par catégorie / jour / PDV", "format": "XLSX", "trigger": "mensuel" },
+    { "from": "pourdebon", "to": "scr_pourdebon", "transport": "API REST", "payload": "commandes B2C", "format": "JSON", "trigger": "à documenter", "style": "dashed" },
+
+    { "from": "lib_exporthh", "to": "scr_couts_mp", "transport": "blob", "payload": "journal commandes MP (order_journal)", "format": "CSV", "trigger": "quotidien (J-1)" },
+    { "from": "lib_exporthh", "to": "scr_production", "transport": "blob", "payload": "ordres de fabrication", "format": "CSV", "trigger": "planifié" },
+    { "from": "lib_exporthh", "to": "scr_ventes_hh", "transport": "blob", "payload": "journal ventes (order_journal)", "format": "CSV", "trigger": "planifié" },
+    { "from": "lib_agicap", "to": "scr_agicap", "transport": "blob", "payload": "trésorerie", "format": "XLSX", "trigger": "planifié" },
+
+    { "from": "saisie_rh", "to": "sh_effectifs", "transport": "saisie manuelle", "payload": "ETP par secteur / semaine (DB_effectifs)", "format": "valeurs", "trigger": "hebdo (Julien)" },
+    { "from": "mapping_secteurs", "to": "sh_effectifs", "transport": "saisie manuelle", "payload": "affectation catégorie → secteur (trame_secteurs)", "format": "valeurs", "trigger": "à la création de catégorie" },
+    { "from": "param_alertes", "to": "sh_couts_mp", "transport": "saisie manuelle", "payload": "seuils veille / critique + emails", "format": "valeurs", "trigger": "ponctuel" },
+    { "from": "prix_manuels", "to": "sh_recettes", "transport": "saisie manuelle", "payload": "produits hors référentiel (eau, film...)", "format": "valeurs", "trigger": "ponctuel" },
+
+    { "from": "scr_ref_produits", "to": "sh_ref_produits", "transport": "écriture", "payload": "référentiel produits (BDD)", "format": "valeurs", "trigger": "hebdo" },
+    { "from": "scr_couts_mp", "to": "sh_couts_mp", "transport": "écriture (append)", "payload": "commandes MP vers Historique", "format": "valeurs", "trigger": "quotidien" },
+    { "from": "scr_production", "to": "sh_production", "transport": "écriture (append)", "payload": "OF classifiés", "format": "valeurs", "trigger": "planifié" },
+    { "from": "scr_ventes_hh", "to": "sh_ventes_hh", "transport": "écriture (truncate)", "payload": "journal ventes", "format": "valeurs", "trigger": "planifié" },
+    { "from": "scr_popina", "to": "sh_popina", "transport": "écriture", "payload": "ventes par PDV + consolidé", "format": "valeurs", "trigger": "mensuel" },
+    { "from": "scr_agicap", "to": "sh_agicap", "transport": "écriture (truncate)", "payload": "trésorerie", "format": "valeurs", "trigger": "planifié" },
+    { "from": "scr_pourdebon", "to": "sh_ventes_hh", "transport": "écriture", "payload": "onglet BDD Ventes PdB", "format": "valeurs", "trigger": "à documenter", "style": "dashed" },
+    { "from": "scr_simulateur", "to": "out_simulateur_ui", "transport": "render", "payload": "recettes + coûts", "format": "HTML", "trigger": "à la demande" },
+
+    { "from": "scr_couts_mp", "to": "bq_commandes_mp", "transport": "load job", "payload": "commandes MP", "format": "CSV", "trigger": "quotidien (append)" },
+    { "from": "scr_production", "to": "bq_ordres_production", "transport": "load job", "payload": "OF classifiés", "format": "CSV", "trigger": "planifié (append)" },
+    { "from": "scr_ventes_hh", "to": "bq_ordres_ventes", "transport": "load job", "payload": "journal ventes", "format": "CSV", "trigger": "planifié (truncate)" },
+    { "from": "scr_agicap", "to": "bq_agicap", "transport": "load job", "payload": "trésorerie", "format": "CSV", "trigger": "planifié (truncate)" },
+    { "from": "scr_couts_mp", "to": "out_alertes_prix", "transport": "email", "payload": "alertes hausse prix (veille / critique)", "format": "HTML email", "trigger": "quotidien si dépassement" },
+
+    { "from": "sh_ref_produits", "to": "bq_products", "transport": "table connectée", "payload": "référentiel produits", "format": "sync", "trigger": "sync Sheets" },
+    { "from": "sh_effectifs", "to": "bq_source_rh", "transport": "table connectée", "payload": "DB_effectifs (ETP)", "format": "sync", "trigger": "sync Sheets" },
+    { "from": "sh_effectifs", "to": "bq_mapping_secteurs", "transport": "table connectée", "payload": "trame_secteurs", "format": "sync", "trigger": "sync Sheets" },
+
+    { "from": "pourdebon", "to": "bq_facturation_pdb", "transport": "pipeline", "payload": "facturation B2C", "format": "à documenter", "trigger": "à documenter", "style": "dashed" },
+
+    { "from": "sh_couts_mp", "to": "sh_recettes", "transport": "IMPORTRANGE", "payload": "référentiel prix MP (dernier tarif)", "format": "live", "trigger": "temps réel", "style": "dashed" },
+
+    { "from": "bq_source_rh", "to": "vw_view_effectifs", "transport": "requête SQL", "payload": "ETP par secteur (UNION)", "format": "vue", "trigger": "à la lecture" },
+    { "from": "bq_ordres_production", "to": "vw_production_kg", "transport": "requête SQL", "payload": "OF PRODUCTION", "format": "vue", "trigger": "à la lecture" },
+    { "from": "bq_products", "to": "vw_production_kg", "transport": "requête SQL", "payload": "packaging_weight (dédup)", "format": "vue", "trigger": "à la lecture" },
+    { "from": "bq_mapping_secteurs", "to": "vw_production_kg", "transport": "requête SQL", "payload": "secteur par catégorie", "format": "vue", "trigger": "à la lecture" },
+    { "from": "vw_production_kg", "to": "vw_productivite", "transport": "requête SQL", "payload": "kg par secteur / jour", "format": "vue", "trigger": "à la lecture" },
+    { "from": "bq_mapping_secteurs", "to": "vw_productivite", "transport": "requête SQL", "payload": "secteur", "format": "vue", "trigger": "à la lecture" },
+    { "from": "vw_view_effectifs", "to": "vw_productivite", "transport": "requête SQL", "payload": "ETP réel par secteur / semaine", "format": "vue", "trigger": "à la lecture" },
+
+    { "from": "vw_production_kg", "to": "out_suivi_production", "transport": "connecteur BQ", "payload": "poids produit", "format": "vue", "trigger": "refresh dashboard" },
+    { "from": "vw_productivite", "to": "out_suivi_production", "transport": "connecteur BQ", "payload": "kg par ETP", "format": "vue", "trigger": "refresh dashboard" },
+    { "from": "bq_commandes_mp", "to": "out_suivi_couts", "transport": "requête SQL (inline)", "payload": "derniers prix par produit / fournisseur", "format": "requête", "trigger": "refresh dashboard" },
+    { "from": "sh_recettes", "to": "out_simulateur_ui", "transport": "sidebar HTML", "payload": "recettes + coûts", "format": "HTML", "trigger": "à la demande" },
+
+    { "from": "sh_ventes_hh", "to": "proc_construction_pnl", "transport": "extrait QUERY", "payload": "export P&L ventes", "format": "valeurs", "trigger": "recalcul", "style": "dashed" },
+    { "from": "sh_popina", "to": "proc_construction_pnl", "transport": "extrait QUERY", "payload": "export P&L Popina", "format": "valeurs", "trigger": "recalcul", "style": "dashed" },
+    { "from": "sh_production", "to": "proc_construction_pnl", "transport": "extrait QUERY", "payload": "export P&L production", "format": "valeurs", "trigger": "recalcul", "style": "dashed" },
+    { "from": "pourdebon", "to": "proc_construction_pnl", "transport": "API REST", "payload": "commandes B2C", "format": "JSON", "trigger": "à documenter", "style": "dashed" },
+    { "from": "proc_construction_pnl", "to": "out_display_pnl", "transport": "snapshot valeurs", "payload": "P&L figé", "format": "valeurs", "trigger": "MAJ mensuelle", "style": "dashed" }
+  ]
+}
