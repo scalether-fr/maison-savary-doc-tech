@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Maison Savary — Cartographie des flux</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.11.1/lib/elk.bundled.js"></script>
 <style>
   :root {
     --bg: #f4f5f8;
@@ -16,7 +17,6 @@
     --text-muted: #626b7f;
     --text-dim: #9aa2b3;
 
-    /* couleurs par type */
     --t-source: #d97706;
     --t-saisie: #ca8a04;
     --t-library: #7c3aed;
@@ -25,7 +25,7 @@
     --t-traitement: #0891b2;
     --t-output: #9333ea;
 
-    --edge-default: #c6ccd8;
+    --edge-default: #b8bfcd;
     --edge-active: #2563eb;
     --warn: #d97706;
     --crit: #dc2626;
@@ -45,24 +45,20 @@
   /* ── Header ── */
   .header {
     position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-    display: flex; align-items: center; gap: 20px;
+    display: flex; align-items: center; gap: 18px;
     padding: 12px 24px;
     background: rgba(255,255,255,0.9);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
   }
-  .header h1 {
-    font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
-    white-space: nowrap;
-  }
+  .header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
   .header h1 span { color: var(--text-muted); font-weight: 400; }
 
   .search-box {
-    flex: 0 0 220px;
+    flex: 0 0 200px;
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 7px; padding: 7px 11px;
-    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
-    outline: none;
+    color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; outline: none;
   }
   .search-box:focus { border-color: var(--edge-active); }
 
@@ -71,18 +67,20 @@
     font-size: 11px; padding: 5px 11px; border-radius: 20px;
     border: 1px solid var(--border); background: var(--surface);
     color: var(--text-muted); cursor: pointer; user-select: none;
-    display: flex; align-items: center; gap: 6px;
-    transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px; transition: all 0.15s;
   }
   .chip .dot { width: 7px; height: 7px; border-radius: 50%; }
   .chip.off { opacity: 0.35; }
   .chip:hover { border-color: var(--border-active); }
 
-  .legend { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; user-select: none; white-space: nowrap; }
+  .toggle input { accent-color: var(--edge-active); cursor: pointer; }
+
+  .legend { display: flex; gap: 13px; margin-left: auto; flex-wrap: wrap; }
   .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); }
   .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
 
-  /* ── Banner validation ── */
+  /* ── Banner ── */
   .banner {
     position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
     z-index: 150; max-width: 720px; width: calc(100% - 48px);
@@ -97,17 +95,15 @@
   .banner .close { margin-left: auto; cursor: pointer; color: inherit; opacity: 0.6; font-size: 16px; padding: 0 4px; }
   .banner .close:hover { opacity: 1; }
 
-  /* ── Ecran d'erreur de chargement ── */
+  /* ── Ecran d'erreur / chargement ── */
   .load-error {
     position: fixed; inset: 0; z-index: 300;
-    display: none; align-items: center; justify-content: center;
-    background: var(--bg);
+    display: none; align-items: center; justify-content: center; background: var(--bg);
   }
   .load-error.show { display: flex; }
   .load-error .card {
-    max-width: 520px; background: var(--surface);
-    border: 1px solid var(--border); border-radius: 12px;
-    padding: 28px 32px; box-shadow: 0 8px 32px rgba(16,24,40,0.08);
+    max-width: 520px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px 32px; box-shadow: 0 8px 32px rgba(16,24,40,0.08);
   }
   .load-error h2 { font-size: 16px; margin-bottom: 10px; }
   .load-error p { font-size: 13.5px; color: var(--text-muted); line-height: 1.55; margin-bottom: 10px; }
@@ -117,30 +113,38 @@
     border-radius: 6px; padding: 9px 12px; margin-top: 4px; color: var(--text);
   }
 
+  .spinner {
+    position: fixed; inset: 0; z-index: 250; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); flex-direction: column; gap: 14px;
+    font-size: 12.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+  }
+  .spinner .ring { width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--edge-active); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner.hidden { display: none; }
+
   /* ── Canvas ── */
   .canvas-container { position: absolute; inset: 0; cursor: grab; }
   .canvas-container:active { cursor: grabbing; }
   .canvas { position: absolute; transform-origin: 0 0; }
   .edges-layer { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 
-  .edge-path { fill: none; stroke: var(--edge-default); stroke-width: 1.6; transition: stroke 0.25s, opacity 0.25s; }
+  .edge-path { fill: none; stroke: var(--edge-default); stroke-width: 1.6; transition: stroke 0.2s, opacity 0.2s; }
   .edge-path.active { stroke: var(--edge-active); stroke-width: 2.4; }
-  .edge-path.dim { opacity: 0.15; }
+  .edge-path.dim { opacity: 0.14; }
   .edge-label {
     font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
-    fill: #8b93a6; transition: fill 0.25s, opacity 0.25s;
+    fill: #7a8296; transition: fill 0.2s, opacity 0.2s;
     paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round;
   }
   .edge-label.active { fill: #3d4557; stroke: #ffffff; }
-  .edge-label.dim { opacity: 0.12; }
+  .edge-label.dim { opacity: 0.1; }
 
   /* ── Nodes ── */
   .node {
     position: absolute; width: 190px;
     background: var(--surface); border: 1px solid var(--border);
     border-left: 3px solid var(--border);
-    border-radius: 9px; padding: 12px 14px; cursor: pointer;
-    user-select: none;
+    border-radius: 9px; padding: 12px 14px; cursor: pointer; user-select: none;
     box-shadow: 0 1px 3px rgba(16,24,40,0.06);
     transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s, opacity 0.2s;
   }
@@ -157,10 +161,7 @@
   .node[data-type="traitement"]{ border-left-color: var(--t-traitement); }
   .node[data-type="output"]    { border-left-color: var(--t-output); }
 
-  .node-type {
-    font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px;
-  }
+  .node-type { font-family: 'JetBrains Mono', monospace; font-size: 8.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 5px; }
   .node[data-type="source"]     .node-type { color: var(--t-source); }
   .node[data-type="saisie"]     .node-type { color: var(--t-saisie); }
   .node[data-type="library"]    .node-type { color: var(--t-library); }
@@ -175,7 +176,7 @@
   .badge-todo { color: var(--warn); }
   .badge-doc { color: var(--text-dim); }
 
-  /* ── Detail panel ── */
+  /* ── Panel ── */
   .panel {
     position: fixed; top: 0; right: 0; bottom: 0; width: 390px; z-index: 200;
     background: var(--surface); border-left: 1px solid var(--border);
@@ -184,31 +185,16 @@
     display: flex; flex-direction: column;
   }
   .panel.open { transform: translateX(0); }
-  .panel-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
-  }
-  .panel-header .ptype {
-    font-family: 'JetBrains Mono', monospace; font-size: 9px;
-    text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim);
-    margin-bottom: 3px;
-  }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 14px; border-bottom: 1px solid var(--border); }
+  .panel-header .ptype { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); margin-bottom: 3px; }
   .panel-header h2 { font-size: 15px; font-weight: 600; }
   .panel-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 20px; padding: 2px 8px; border-radius: 4px; }
   .panel-close:hover { background: var(--surface-hover); color: var(--text); }
   .panel-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
 
   .psection { margin-bottom: 20px; }
-  .psection-title {
-    font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); margin-bottom: 9px;
-  }
-  .plink {
-    display: inline-flex; align-items: center; gap: 7px; margin: 0 8px 8px 0;
-    padding: 8px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600;
-    text-decoration: none; background: var(--edge-active); color: #ffffff;
-    transition: opacity 0.15s;
-  }
+  .psection-title { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-dim); margin-bottom: 9px; }
+  .plink { display: inline-flex; align-items: center; gap: 7px; margin: 0 8px 8px 0; padding: 8px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 600; text-decoration: none; background: var(--edge-active); color: #fff; transition: opacity 0.15s; }
   .plink.secondary { background: var(--surface-hover); color: var(--text); border: 1px solid var(--border); }
   .plink:hover { opacity: 0.85; }
 
@@ -250,6 +236,7 @@
   <h1>Cartographie des flux <span>— Maison Savary</span></h1>
   <input class="search-box" id="search" placeholder="Rechercher un node..." autocomplete="off">
   <div class="chips" id="chips"></div>
+  <label class="toggle"><input type="checkbox" id="lblToggle"> libellés</label>
   <div class="legend" id="legend"></div>
 </div>
 
@@ -258,13 +245,15 @@
   <span class="close" id="bannerClose">×</span>
 </div>
 
+<div class="spinner" id="spinner"><div class="ring"></div><div>calcul de la mise en page…</div></div>
+
 <div class="load-error" id="loadError">
   <div class="card">
-    <h2>data.json introuvable</h2>
-    <p>Le visualiseur charge ses données depuis <strong>data.json</strong>, qui doit être placé dans le même dossier et servi par un serveur HTTP. Ouvert en double-clic (file://), le navigateur bloque ce chargement.</p>
+    <h2 id="leTitle">Chargement impossible</h2>
+    <p id="leMsg"></p>
     <p>Pour tester en local, lance dans le dossier :</p>
     <code>python3 -m http.server 8000</code>
-    <p style="margin-top:10px">puis ouvre <strong>http://localhost:8000</strong>. Détail de l'erreur en console.</p>
+    <p style="margin-top:10px">puis ouvre <strong>http://localhost:8000</strong>. Détail en console (F12).</p>
   </div>
 </div>
 
@@ -295,42 +284,83 @@
 
 <script>
 // ════════════════════════════════════════════════════════════════
-//  CONFIG rendu
+//  CONFIG
 // ════════════════════════════════════════════════════════════════
 const CFG = {
-  COL_W: 260,     // largeur d'une colonne (par layer)
-  ROW_H: 108,     // hauteur d'un cran vertical dans une colonne
-  MARGIN_X: 60,
-  MARGIN_Y: 70,
   NODE_W: 190,
   TYPE_LABEL: {
     source: 'source', saisie: 'saisie', library: 'librairie',
     script: 'script', storage: 'stockage', traitement: 'traitement', output: 'restitution'
+  },
+  // Options ELK : layout en couches, gauche->droite, arêtes orthogonales.
+  // Le partitionnement force chaque node dans la colonne de son "layer".
+  ELK: {
+    'elk.algorithm': 'layered',
+    'elk.direction': 'RIGHT',
+    'elk.edgeRouting': 'ORTHOGONAL',
+    'elk.partitioning.activate': 'true',
+    'elk.layered.spacing.nodeNodeBetweenLayers': '110',
+    'elk.spacing.nodeNode': '34',
+    'elk.spacing.edgeNode': '22',
+    'elk.spacing.edgeEdge': '16',
+    'elk.layered.spacing.edgeNodeBetweenLayers': '26',
+    'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+    'elk.layered.crossingMinimization.semiInteractive': 'true',
+    'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX'
   }
 };
 
 // ════════════════════════════════════════════════════════════════
-//  CHARGEMENT DES DONNEES
-//  data.json est la seule source. S'il est injoignable (ouverture en
-//  file:// ou fichier absent), un écran d'erreur explique quoi faire.
+//  ETAT
 // ════════════════════════════════════════════════════════════════
 let DATA = null;
+const els = {};                 // id -> DOM node
+let nodeById = {};
+let routeByEdge = new Map();     // index edge -> [{x,y}, ...]
+let outAdj = {}, inAdj = {};
+let activeId = null;
+let activeDomains = new Set();
+let showLabels = false;
 
+const canvas = document.getElementById('canvas');
+const edgesSvg = document.getElementById('edges');
+const panel = document.getElementById('panel');
+const spinner = document.getElementById('spinner');
+
+// ════════════════════════════════════════════════════════════════
+//  BOOT
+// ════════════════════════════════════════════════════════════════
 async function boot() {
+  if (typeof ELK === 'undefined') {
+    return fail('Librairie de mise en page (elkjs) non chargée',
+      'Le script elkjs n\'a pas pu être récupéré depuis le CDN. Vérifie la connexion réseau, ou héberge elk.bundled.js localement à côté de index.html.');
+  }
   try {
     const res = await fetch('data.json', { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     DATA = await res.json();
   } catch (e) {
-    console.error('[carto] échec du chargement de data.json :', e);
-    document.getElementById('loadError').classList.add('show');
-    return;
+    console.error('[carto] data.json :', e);
+    return fail('data.json introuvable',
+      'Le visualiseur charge ses données depuis data.json, servi par un serveur HTTP dans le même dossier. En double-clic (file://) le navigateur bloque ce chargement.');
   }
-  init();
+  try {
+    await init();
+  } catch (e) {
+    console.error('[carto] layout :', e);
+    return fail('Échec du calcul de la mise en page', String(e && e.message || e));
+  }
+}
+
+function fail(title, msg) {
+  spinner.classList.add('hidden');
+  document.getElementById('leTitle').textContent = title;
+  document.getElementById('leMsg').textContent = msg;
+  document.getElementById('loadError').classList.add('show');
 }
 
 // ════════════════════════════════════════════════════════════════
-//  VALIDATION (la carte se contrôle elle-même)
+//  VALIDATION
 // ════════════════════════════════════════════════════════════════
 function validate(data) {
   const errors = [], warnings = [];
@@ -379,58 +409,88 @@ function showBanner(v) {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  LAYOUT auto par layer (x,y explicites si fournis)
+//  INIT : DOM -> mesure -> ELK -> placement
 // ════════════════════════════════════════════════════════════════
-function computeLayout(nodes) {
-  const byLayer = {};
-  nodes.forEach(n => { (byLayer[n.layer] = byLayer[n.layer] || []).push(n); });
-  Object.values(byLayer).forEach(col => {
-    col.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
-    col.forEach((n, i) => {
-      if (n.x == null) n.x = CFG.MARGIN_X + n.layer * CFG.COL_W;
-      if (n.y == null) n.y = CFG.MARGIN_Y + i * CFG.ROW_H;
-    });
-  });
-}
-
-// ════════════════════════════════════════════════════════════════
-//  ETAT
-// ════════════════════════════════════════════════════════════════
-const els = {};          // id -> element DOM
-let nodeById = {};
-let outAdj = {}, inAdj = {};
-let activeId = null;
-let activeDomains = new Set();
-
-const canvas = document.getElementById('canvas');
-const edgesSvg = document.getElementById('edges');
-const panel = document.getElementById('panel');
-
-// ════════════════════════════════════════════════════════════════
-//  INIT
-// ════════════════════════════════════════════════════════════════
-function init() {
+async function init() {
   showBanner(validate(DATA));
-  computeLayout(DATA.nodes);
 
   DATA.nodes.forEach(n => nodeById[n.id] = n);
-  DATA.edges.forEach(e => {
+  DATA.edges.forEach((e, i) => {
     (outAdj[e.from] = outAdj[e.from] || []).push(e.to);
     (inAdj[e.to] = inAdj[e.to] || []).push(e.from);
   });
-
   DATA.domaines.forEach(d => activeDomains.add(d.id));
+
+  buildNodes();                 // crée les DOM nodes (hors écran, position 0)
+  await document.fonts.ready;   // mesures fiables une fois les polices chargées
+
+  // graphe ELK, nodes triés par (layer, order) pour guider l'ordre vertical
+  const ordered = [...DATA.nodes].sort((a, b) =>
+    (a.layer - b.layer) || ((a.order ?? 999) - (b.order ?? 999)));
+
+  const graph = {
+    id: 'root',
+    layoutOptions: CFG.ELK,
+    children: ordered.map(n => ({
+      id: n.id,
+      width: CFG.NODE_W,
+      height: els[n.id].offsetHeight || 74,
+      layoutOptions: { 'elk.partitioning.partition': String(n.layer) }
+    })),
+    edges: DATA.edges.map((e, i) => ({ id: 'e' + i, sources: [e.from], targets: [e.to] }))
+  };
+
+  const elk = new ELK();
+  const res = await elk.layout(graph);
+
+  // place les nodes
+  res.children.forEach(c => {
+    const n = nodeById[c.id];
+    n.x = c.x; n.y = c.y; n.w = c.width; n.h = c.height;
+    const el = els[c.id];
+    el.style.left = c.x + 'px';
+    el.style.top = c.y + 'px';
+  });
+
+  // mémorise le tracé de chaque arête (routage orthogonal ELK)
+  res.edges.forEach(e => {
+    const idx = parseInt(e.id.slice(1), 10);
+    const s = e.sections && e.sections[0];
+    if (!s) { routeByEdge.set(idx, []); return; }
+    routeByEdge.set(idx, [s.startPoint, ...(s.bendPoints || []), s.endPoint]);
+  });
+
+  // dimensionne la couche SVG
+  edgesSvg.setAttribute('width', (res.width || 2000) + 100);
+  edgesSvg.setAttribute('height', (res.height || 1200) + 100);
+
   buildLegend();
   buildChips();
-  buildNodes();
+  spinner.classList.add('hidden');
+  applyVisibility();
+  renderEdges();
+  fit();
+}
 
-  // dimensionne la couche edges
-  let maxX = 0, maxY = 0;
-  DATA.nodes.forEach(n => { maxX = Math.max(maxX, n.x + CFG.NODE_W); maxY = Math.max(maxY, n.y + 120); });
-  edgesSvg.setAttribute('width', maxX + 80);
-  edgesSvg.setAttribute('height', maxY + 80);
-
-  requestAnimationFrame(() => { applyVisibility(); renderEdges(); });
+function buildNodes() {
+  DATA.nodes.forEach(n => {
+    const el = document.createElement('div');
+    el.className = 'node';
+    el.dataset.type = n.type;
+    el.dataset.id = n.id;
+    el.style.left = '0px'; el.style.top = '0px';
+    const badges =
+      (n.todo && n.todo.length ? '<span class="badge-todo" title="TODO / fragilité">⚠</span>' : '') +
+      ((n.links && n.links.length) ? '<span class="badge-doc" title="lien(s) associé(s)">↗</span>' : '');
+    el.innerHTML =
+      '<div class="node-badges">' + badges + '</div>' +
+      '<div class="node-type">' + (CFG.TYPE_LABEL[n.type] || n.type) + '</div>' +
+      '<div class="node-name">' + n.label + '</div>' +
+      '<div class="node-desc">' + (n.desc || '') + '</div>';
+    el.addEventListener('click', (ev) => { ev.stopPropagation(); selectNode(n.id); });
+    canvas.appendChild(el);
+    els[n.id] = el;
+  });
 }
 
 function buildLegend() {
@@ -453,90 +513,98 @@ function buildChips() {
   });
 }
 
-function buildNodes() {
-  DATA.nodes.forEach(n => {
-    const el = document.createElement('div');
-    el.className = 'node';
-    el.dataset.type = n.type;
-    el.dataset.id = n.id;
-    el.style.left = n.x + 'px';
-    el.style.top = n.y + 'px';
-    const badges =
-      (n.todo && n.todo.length ? '<span class="badge-todo" title="TODO / fragilité">⚠</span>' : '') +
-      ((n.links && n.links.length) ? '<span class="badge-doc" title="lien(s) associé(s)">↗</span>' : '');
-    el.innerHTML =
-      '<div class="node-badges">' + badges + '</div>' +
-      '<div class="node-type">' + (CFG.TYPE_LABEL[n.type] || n.type) + '</div>' +
-      '<div class="node-name">' + n.label + '</div>' +
-      '<div class="node-desc">' + (n.desc || '') + '</div>';
-    el.addEventListener('click', (ev) => { ev.stopPropagation(); selectNode(n.id); });
-    canvas.appendChild(el);
-    els[n.id] = el;
-  });
-}
-
 // ── visibilité par domaine (transverse toujours visible) ──
-function nodeVisible(n) {
-  return !n.domain || n.domain === 'transverse' || activeDomains.has(n.domain);
-}
-function applyVisibility() {
-  DATA.nodes.forEach(n => els[n.id].classList.toggle('hidden', !nodeVisible(n)));
-}
+function nodeVisible(n) { return !n.domain || n.domain === 'transverse' || activeDomains.has(n.domain); }
+function applyVisibility() { DATA.nodes.forEach(n => els[n.id].classList.toggle('hidden', !nodeVisible(n))); }
 
 // ════════════════════════════════════════════════════════════════
-//  EDGES
+//  EDGES (tracé fourni par ELK, coins arrondis)
 // ════════════════════════════════════════════════════════════════
-function port(id, side) {
-  const el = els[id];
-  const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
-  const h = el.offsetHeight || 70;
-  return side === 'right' ? { x: x + CFG.NODE_W, y: y + h / 2 } : { x: x, y: y + h / 2 };
+function roundedPath(pts, r) {
+  if (pts.length < 2) return '';
+  if (pts.length === 2) return 'M' + pts[0].x + ',' + pts[0].y + ' L' + pts[1].x + ',' + pts[1].y;
+  let d = 'M' + pts[0].x + ',' + pts[0].y;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+    const v1 = { x: p1.x - p0.x, y: p1.y - p0.y }, v2 = { x: p2.x - p1.x, y: p2.y - p1.y };
+    const l1 = Math.hypot(v1.x, v1.y) || 1, l2 = Math.hypot(v2.x, v2.y) || 1;
+    const rr = Math.min(r, l1 / 2, l2 / 2);
+    const a = { x: p1.x - v1.x / l1 * rr, y: p1.y - v1.y / l1 * rr };
+    const b = { x: p1.x + v2.x / l2 * rr, y: p1.y + v2.y / l2 * rr };
+    d += ' L' + a.x + ',' + a.y + ' Q' + p1.x + ',' + p1.y + ' ' + b.x + ',' + b.y;
+  }
+  const last = pts[pts.length - 1];
+  d += ' L' + last.x + ',' + last.y;
+  return d;
+}
+
+// point à ~48% de la longueur cumulée d'une polyligne
+function pointAlong(pts, frac) {
+  if (pts.length < 2) return pts[0] || { x: 0, y: 0 };
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+  let target = total * frac, acc = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    if (acc + seg >= target) {
+      const t = seg ? (target - acc) / seg : 0;
+      return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t };
+    }
+    acc += seg;
+  }
+  return pts[pts.length - 1];
 }
 
 function renderEdges() {
   const NS = 'http://www.w3.org/2000/svg';
   edgesSvg.innerHTML = '';
   const lineage = activeId ? lineageSet(activeId) : null;
+  const labels = [];
 
-  DATA.edges.forEach(e => {
+  DATA.edges.forEach((e, i) => {
     const nf = nodeById[e.from], nt = nodeById[e.to];
-    if (!nf || !nt) return;
-    if (!nodeVisible(nf) || !nodeVisible(nt)) return;
+    if (!nf || !nt || !nodeVisible(nf) || !nodeVisible(nt)) return;
+    const pts = routeByEdge.get(i);
+    if (!pts || pts.length < 2) return;
 
-    // sens gauche->droite selon x
-    const leftFirst = nf.x <= nt.x;
-    const a = port(e.from, leftFirst ? 'right' : 'left');
-    const b = port(e.to, leftFirst ? 'left' : 'right');
-    const cp = Math.max(50, Math.abs(b.x - a.x) * 0.42) * (leftFirst ? 1 : -1);
-    const d = 'M' + a.x + ',' + a.y + ' C' + (a.x + cp) + ',' + a.y + ' ' + (b.x - cp) + ',' + b.y + ' ' + b.x + ',' + b.y;
-
+    const onLineage = lineage && lineage.has(e.from) && lineage.has(e.to);
     let cls = 'edge-path';
-    if (lineage) cls += lineage.has(e.from) && lineage.has(e.to) ? ' active' : ' dim';
+    if (lineage) cls += onLineage ? ' active' : ' dim';
     const path = document.createElementNS(NS, 'path');
-    path.setAttribute('d', d);
+    path.setAttribute('d', roundedPath(pts, 9));
     path.setAttribute('class', cls);
     if (e.style === 'dashed') path.setAttribute('stroke-dasharray', '6 4');
     edgesSvg.appendChild(path);
 
-    // Label : par défaut seulement si colonnes adjacentes (le milieu tombe
-    // dans le gap inter-colonnes, hors des cards). Les edges longs n'affichent
-    // leur label que quand leur lignée est active (au clic).
-    const onLineage = lineage && lineage.has(e.from) && lineage.has(e.to);
-    const adjacent = Math.abs((nf.layer ?? 0) - (nt.layer ?? 0)) <= 1;
-    const showLabel = e.transport && (onLineage || (!lineage && adjacent));
-    if (showLabel) {
-      const t = document.createElementNS(NS, 'text');
-      t.setAttribute('x', (a.x + b.x) / 2);
-      t.setAttribute('y', (a.y + b.y) / 2 - 6);
-      t.setAttribute('text-anchor', 'middle');
-      t.setAttribute('class', 'edge-label' + (onLineage ? ' active' : ''));
-      t.textContent = e.transport;
-      edgesSvg.appendChild(t);
+    // libellé : si toggle actif, ou si l'arête est sur la lignée sélectionnée
+    if (e.transport && (onLineage || (showLabels && !lineage) || (showLabels && onLineage))) {
+      const p = pointAlong(pts, 0.48);
+      labels.push({ x: p.x, y: p.y - 5, text: e.transport, active: !!onLineage });
     }
+  });
+
+  // anti-collision verticale des libellés
+  const placed = [], CH = 5.4, VH = 13;
+  labels.forEach(l => {
+    const w = l.text.length * CH;
+    let y = l.y;
+    for (let k = 0; k < 24; k++) {
+      const hit = placed.some(p => Math.abs(p.x - l.x) < (p.w + w) / 2 + 4 && Math.abs(p.y - y) < VH);
+      if (!hit) break;
+      const step = Math.ceil((k + 1) / 2) * VH;
+      y = l.y + (k % 2 === 0 ? step : -step);
+    }
+    placed.push({ x: l.x, y, w });
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', l.x); t.setAttribute('y', y);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('class', 'edge-label' + (l.active ? ' active' : ''));
+    t.textContent = l.text;
+    edgesSvg.appendChild(t);
   });
 }
 
-// ── lignée = node + tous ancêtres (amont) + tous descendants (aval) ──
+// ── lignée = node + ancêtres (amont) + descendants (aval) ──
 function lineageSet(id) {
   const set = new Set([id]);
   const up = [id];
@@ -571,34 +639,25 @@ function fieldVal(v) {
 
 function fillPanel(id, lineageCount) {
   const n = nodeById[id];
-  document.getElementById('pType').textContent = (CFG.TYPE_LABEL[n.type] || n.type) +
-    (n.domain ? ' · ' + n.domain : '');
+  document.getElementById('pType').textContent = (CFG.TYPE_LABEL[n.type] || n.type) + (n.domain ? ' · ' + n.domain : '');
   document.getElementById('pTitle').textContent = n.label;
-
   let h = '';
 
-  // liens
   if (n.links && n.links.length) {
     h += '<div class="psection">' + n.links.map((l, i) =>
       '<a class="plink' + (i > 0 ? ' secondary' : '') + '" href="' + l.url + '" target="_blank" rel="noopener">↗ ' + esc(l.label) + '</a>'
     ).join('') + '</div>';
   }
-
-  // TODO
   if (n.todo && n.todo.length) {
     h += '<div class="psection"><div class="todo-box"><div class="th">⚠ TODO / fragilité</div><ul>' +
       n.todo.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul></div></div>';
   }
-
-  // meta
   if (n.meta && Object.keys(n.meta).length) {
     h += '<div class="psection"><div class="psection-title">Détails</div>' +
       Object.entries(n.meta).map(([k, v]) =>
         '<div class="pfield"><span class="pfield-k">' + esc(k) + '</span><span class="pfield-v">' + fieldVal(v) + '</span></div>'
       ).join('') + '</div>';
   }
-
-  // connexions
   const inE = DATA.edges.filter(e => e.to === id);
   const outE = DATA.edges.filter(e => e.from === id);
   if (inE.length || outE.length) {
@@ -607,10 +666,8 @@ function fillPanel(id, lineageCount) {
     outE.forEach(e => h += connItem('out', nodeById[e.to].label, e.to, e));
     h += '</ul></div>';
   }
-
   document.getElementById('pBody').innerHTML = h;
-  document.querySelectorAll('.conn .cname').forEach(el =>
-    el.addEventListener('click', () => selectNode(el.dataset.go)));
+  document.querySelectorAll('.conn .cname').forEach(el => el.addEventListener('click', () => selectNode(el.dataset.go)));
 }
 
 function connItem(dir, name, goId, e) {
@@ -627,15 +684,15 @@ function connItem(dir, name, goId, e) {
 
 function clearSelection() {
   activeId = null;
-  DATA.nodes.forEach(n => { els[n.id].classList.remove('active', 'dim'); });
+  DATA.nodes.forEach(n => els[n.id].classList.remove('active', 'dim'));
   renderEdges();
   panel.classList.remove('open');
 }
 
 document.getElementById('pClose').addEventListener('click', clearSelection);
 document.getElementById('bannerClose').addEventListener('click', () => document.getElementById('banner').classList.remove('show'));
+document.getElementById('lblToggle').addEventListener('change', (e) => { showLabels = e.target.checked; renderEdges(); });
 
-// ── recherche ──
 document.getElementById('search').addEventListener('keydown', (ev) => {
   if (ev.key !== 'Enter') return;
   const q = ev.target.value.trim().toLowerCase();
@@ -647,12 +704,21 @@ document.getElementById('search').addEventListener('keydown', (ev) => {
 // ════════════════════════════════════════════════════════════════
 //  PAN & ZOOM
 // ════════════════════════════════════════════════════════════════
-let scale = 0.8, panX = 20, panY = -30, panning = false, sx, sy;
+let scale = 0.8, panX = 20, panY = 20, panning = false, sx, sy;
 function applyT() { canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')'; document.getElementById('zLvl').textContent = Math.round(scale * 100) + '%'; }
-applyT();
+
+function fit() {
+  let maxX = 0, maxY = 0;
+  DATA.nodes.forEach(n => { if (n.x != null) { maxX = Math.max(maxX, n.x + (n.w || CFG.NODE_W)); maxY = Math.max(maxY, n.y + (n.h || 74)); } });
+  const availW = window.innerWidth - 60, availH = window.innerHeight - 140;
+  scale = Math.min(1, availW / (maxX + 40), availH / (maxY + 40));
+  scale = Math.max(0.25, scale);
+  panX = 30; panY = 90;
+  applyT();
+}
 
 function centerOn(n) {
-  scale = 0.9;
+  scale = Math.max(scale, 0.85);
   panX = window.innerWidth / 2 - (n.x + CFG.NODE_W / 2) * scale - 195;
   panY = window.innerHeight / 2 - (n.y + 35) * scale;
   applyT();
@@ -663,11 +729,11 @@ cc.addEventListener('mousedown', (e) => { if (e.target.closest('.node')) return;
 window.addEventListener('mousemove', (e) => { if (!panning) return; panX = e.clientX - sx; panY = e.clientY - sy; applyT(); });
 window.addEventListener('mouseup', () => panning = false);
 cc.addEventListener('click', (e) => { if (!e.target.closest('.node')) clearSelection(); });
-cc.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.min(2, Math.max(0.3, scale + (e.deltaY > 0 ? -0.08 : 0.08))); applyT(); }, { passive: false });
+cc.addEventListener('wheel', (e) => { e.preventDefault(); scale = Math.min(2, Math.max(0.25, scale + (e.deltaY > 0 ? -0.08 : 0.08))); applyT(); }, { passive: false });
 
 document.getElementById('zIn').addEventListener('click', () => { scale = Math.min(2, scale + 0.15); applyT(); });
-document.getElementById('zOut').addEventListener('click', () => { scale = Math.max(0.3, scale - 0.15); applyT(); });
-document.getElementById('zFit').addEventListener('click', () => { scale = 0.8; panX = 20; panY = -30; applyT(); });
+document.getElementById('zOut').addEventListener('click', () => { scale = Math.max(0.25, scale - 0.15); applyT(); });
+document.getElementById('zFit').addEventListener('click', fit);
 
 boot();
 </script>
