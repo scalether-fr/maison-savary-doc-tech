@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Maison Savary - Cartographie des flux</title>
+<title>Maison Savary — Cartographie des flux</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -129,8 +129,9 @@
   .edge-label {
     font-family: 'JetBrains Mono', monospace; font-size: 9.5px;
     fill: #8b93a6; transition: fill 0.25s, opacity 0.25s;
+    paint-order: stroke; stroke: var(--bg); stroke-width: 3.5px; stroke-linejoin: round;
   }
-  .edge-label.active { fill: #3d4557; }
+  .edge-label.active { fill: #3d4557; stroke: #ffffff; }
   .edge-label.dim { opacity: 0.12; }
 
   /* ── Nodes ── */
@@ -308,9 +309,11 @@ const CFG = {
   }
 };
 
-/**  CHARGEMENT DES DONNEES
-  data.json est la seule source. S'il est injoignable (ouverture en
-  file:// ou fichier absent), un écran d'erreur explique quoi faire.**/
+// ════════════════════════════════════════════════════════════════
+//  CHARGEMENT DES DONNEES
+//  data.json est la seule source. S'il est injoignable (ouverture en
+//  file:// ou fichier absent), un écran d'erreur explique quoi faire.
+// ════════════════════════════════════════════════════════════════
 let DATA = null;
 
 async function boot() {
@@ -326,7 +329,9 @@ async function boot() {
   init();
 }
 
+// ════════════════════════════════════════════════════════════════
 //  VALIDATION (la carte se contrôle elle-même)
+// ════════════════════════════════════════════════════════════════
 function validate(data) {
   const errors = [], warnings = [];
   const ids = new Set();
@@ -351,7 +356,7 @@ function validate(data) {
     if (inp && !hasOut.has(n.id)) warnings.push('entrée sans sortie : ' + n.id);
     if (out && !hasIn.has(n.id)) warnings.push('restitution sans source : ' + n.id);
     if (!inp && !out && !hasIn.has(n.id) && !hasOut.has(n.id)) warnings.push('node isolé : ' + n.id);
-    else if (!inp && !out && !hasIn.has(n.id)) warnings.push('stockage/traitement sans alimentation : ' + n.id);
+    else if ((n.type === 'storage' || n.type === 'traitement') && !hasIn.has(n.id)) warnings.push('stockage/traitement sans alimentation : ' + n.id);
   });
 
   return { errors, warnings };
@@ -373,7 +378,9 @@ function showBanner(v) {
                  ...v.warnings.map(x => ({ niveau: 'warning', message: x }))]);
 }
 
+// ════════════════════════════════════════════════════════════════
 //  LAYOUT auto par layer (x,y explicites si fournis)
+// ════════════════════════════════════════════════════════════════
 function computeLayout(nodes) {
   const byLayer = {};
   nodes.forEach(n => { (byLayer[n.layer] = byLayer[n.layer] || []).push(n); });
@@ -386,7 +393,9 @@ function computeLayout(nodes) {
   });
 }
 
+// ════════════════════════════════════════════════════════════════
 //  ETAT
+// ════════════════════════════════════════════════════════════════
 const els = {};          // id -> element DOM
 let nodeById = {};
 let outAdj = {}, inAdj = {};
@@ -397,7 +406,9 @@ const canvas = document.getElementById('canvas');
 const edgesSvg = document.getElementById('edges');
 const panel = document.getElementById('panel');
 
+// ════════════════════════════════════════════════════════════════
 //  INIT
+// ════════════════════════════════════════════════════════════════
 function init() {
   showBanner(validate(DATA));
   computeLayout(DATA.nodes);
@@ -464,7 +475,7 @@ function buildNodes() {
   });
 }
 
-//  visibilité par domaine (transverse toujours visible) 
+// ── visibilité par domaine (transverse toujours visible) ──
 function nodeVisible(n) {
   return !n.domain || n.domain === 'transverse' || activeDomains.has(n.domain);
 }
@@ -472,7 +483,9 @@ function applyVisibility() {
   DATA.nodes.forEach(n => els[n.id].classList.toggle('hidden', !nodeVisible(n)));
 }
 
+// ════════════════════════════════════════════════════════════════
 //  EDGES
+// ════════════════════════════════════════════════════════════════
 function port(id, side) {
   const el = els[id];
   const x = parseFloat(el.style.left), y = parseFloat(el.style.top);
@@ -505,21 +518,25 @@ function renderEdges() {
     if (e.style === 'dashed') path.setAttribute('stroke-dasharray', '6 4');
     edgesSvg.appendChild(path);
 
-    if (e.transport) {
+    // Label : par défaut seulement si colonnes adjacentes (le milieu tombe
+    // dans le gap inter-colonnes, hors des cards). Les edges longs n'affichent
+    // leur label que quand leur lignée est active (au clic).
+    const onLineage = lineage && lineage.has(e.from) && lineage.has(e.to);
+    const adjacent = Math.abs((nf.layer ?? 0) - (nt.layer ?? 0)) <= 1;
+    const showLabel = e.transport && (onLineage || (!lineage && adjacent));
+    if (showLabel) {
       const t = document.createElementNS(NS, 'text');
       t.setAttribute('x', (a.x + b.x) / 2);
       t.setAttribute('y', (a.y + b.y) / 2 - 6);
       t.setAttribute('text-anchor', 'middle');
-      let lcls = 'edge-label';
-      if (lineage) lcls += lineage.has(e.from) && lineage.has(e.to) ? ' active' : ' dim';
-      t.setAttribute('class', lcls);
+      t.setAttribute('class', 'edge-label' + (onLineage ? ' active' : ''));
       t.textContent = e.transport;
       edgesSvg.appendChild(t);
     }
   });
 }
 
-//  lignée = node + tous ancêtres (amont) + tous descendants (aval)
+// ── lignée = node + tous ancêtres (amont) + tous descendants (aval) ──
 function lineageSet(id) {
   const set = new Set([id]);
   const up = [id];
@@ -529,7 +546,9 @@ function lineageSet(id) {
   return set;
 }
 
+// ════════════════════════════════════════════════════════════════
 //  SELECTION + PANEL
+// ════════════════════════════════════════════════════════════════
 function selectNode(id) {
   activeId = id;
   const lineage = lineageSet(id);
@@ -616,7 +635,7 @@ function clearSelection() {
 document.getElementById('pClose').addEventListener('click', clearSelection);
 document.getElementById('bannerClose').addEventListener('click', () => document.getElementById('banner').classList.remove('show'));
 
-//  recherche
+// ── recherche ──
 document.getElementById('search').addEventListener('keydown', (ev) => {
   if (ev.key !== 'Enter') return;
   const q = ev.target.value.trim().toLowerCase();
@@ -625,7 +644,9 @@ document.getElementById('search').addEventListener('keydown', (ev) => {
   if (hit) { centerOn(hit); selectNode(hit.id); }
 });
 
+// ════════════════════════════════════════════════════════════════
 //  PAN & ZOOM
+// ════════════════════════════════════════════════════════════════
 let scale = 0.8, panX = 20, panY = -30, panning = false, sx, sy;
 function applyT() { canvas.style.transform = 'translate(' + panX + 'px,' + panY + 'px) scale(' + scale + ')'; document.getElementById('zLvl').textContent = Math.round(scale * 100) + '%'; }
 applyT();
