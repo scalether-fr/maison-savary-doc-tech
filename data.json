@@ -2,8 +2,8 @@
   "meta": {
     "titre": "Cartographie des flux",
     "sous_titre": "Maison Savary — pilotage data",
-    "version": 2,
-    "genere_le": "2026-07-27",
+    "version": 3,
+    "genere_le": "2026-09-12",
     "note": "Source de vérité de la carte. Editer ce fichier (nodes / edges) suffit, le visualiseur ne bouge pas."
   },
   "domaines": [
@@ -105,17 +105,14 @@
       "id": "mapping_secteurs",
       "type": "saisie",
       "label": "Mapping secteurs",
-      "desc": "Catégorie → secteur (trame_secteurs)",
+      "desc": "Affectation secteur (trame_secteurs)",
       "domain": "production",
       "layer": 0,
       "order": 22,
       "meta": {
-        "Contenu": "Affectation manuelle catégorie Hello Harel → Pain / Patisserie / Emballage",
-        "Support": "Onglet trame_secteurs du fichier effectifs, listing des catégories via onglet ordres_production (sync BQ)"
-      },
-      "todo": [
-        "URGENT, repenser cette logique. Le listing des catégories (onglet ordres_production) sert de base à l'affectation, mais les lignes bougent : l'affectation par position se désaligne dès qu'une catégorie apparaît ou disparaît. Passer à une clé stable (nom de catégorie) plutôt qu'une position de ligne."
-      ]
+        "Contenu": "Affectation manuelle secteur (Pain / Patisserie / Emballage) sur les catégories déjà listées dans trame_secteurs",
+        "Support": "Onglet trame_secteurs du fichier effectifs. Le listing des catégories est désormais alimenté par le script scr_sync_secteurs (lecture directe du Sheet Production), plus de dépendance à BigQuery pour cette étape."
+      }
     },
     {
       "id": "param_alertes",
@@ -236,6 +233,25 @@
       }
     },
     {
+      "id": "scr_sync_secteurs",
+      "type": "script",
+      "label": "Sync secteurs",
+      "desc": "Alimente trame_secteurs (append-only)",
+      "domain": "production",
+      "layer": 2,
+      "order": 21,
+      "meta": {
+        "Fonction": "syncTrameSecteurs, lit l'onglet BDD du Sheet Production, résout la colonne Category par en-tête (jamais par index en dur), ajoute uniquement les catégories absentes de trame_secteurs (appendRow, secteur laissé vide)",
+        "Déclenchement": "Manuel pour l'instant",
+        "Dépendance": "Aucune (lecture Sheets directe, plus de passage par BigQuery)",
+        "Garantie": "Jamais de réécriture en bloc de trame_secteurs, clé stable = nom de catégorie"
+      },
+      "todo": [
+        "Décider du déclenchement définitif : trigger horaire séparé, ou appel direct depuis scr_production juste après l'écriture des OF pour éliminer toute dépendance temporelle entre les deux scripts.",
+        "Généraliser la résolution par en-tête aux colonnes de trame_secteurs elle-même (Category / Secteur) plutôt que des colonnes A/B fixes."
+      ]
+    },
+    {
       "id": "scr_ventes_hh",
       "type": "script",
       "label": "Export ventes HH",
@@ -336,11 +352,13 @@
         { "label": "Ouvrir le fichier", "url": "https://docs.google.com/spreadsheets/d/1zZ_7Tk0aloIjwl3M03weFZUPmLNuSNffP4aSKfEufUI" }
       ],
       "meta": {
-        "ID": "1zZ_7Tk0aloIjwl3M03weFZUPmLNuSNffP4aSKfEufUI",
-        "Onglets": "DB_effectifs (ETP), trame_secteurs (mapping), ordres_production (listing catégories)",
-        "Alimentation": "Saisie manuelle (Julien) + sync BQ pour le listing",
+        "Onglets": "DB_effectifs (ETP), trame_secteurs (mapping catégorie → secteur)",
+        "Alimentation": "Saisie manuelle (Julien) pour l'ETP + affectation secteur ; listing des catégories alimenté par scr_sync_secteurs",
         "Consommé par": "BQ source_sheet_rh et source_sheet_mapping_secteurs"
-      }
+      },
+      "todo": [
+        "Ancien onglet ordres_production (listing de catégories via sync BQ) devenu obsolète après passage à scr_sync_secteurs. Vérifier qu'il n'est plus référencé ailleurs avant suppression."
+      ]
     },
     {
       "id": "sh_ref_produits",
@@ -391,9 +409,9 @@
       ],
       "meta": {
         "ID": "12usaOi5e241jGG-JAxAfRH6-xtrtO9Q9sdNz9T1lOE4",
-        "Onglets": "BDD (OF), export P&L (QUERY 12 mois glissants)",
+        "Onglets": "BDD (OF, colonne Category source du mapping secteurs), export P&L (QUERY 12 mois glissants)",
         "Alimentation": "Script Production",
-        "Consommé par": "BQ ordres_production, Construction P&L"
+        "Consommé par": "BQ ordres_production, Construction P&L, scr_sync_secteurs"
       }
     },
     {
@@ -804,13 +822,15 @@
     { "from": "lib_agicap", "to": "scr_agicap", "transport": "blob", "payload": "trésorerie", "format": "XLSX", "trigger": "planifié" },
 
     { "from": "saisie_rh", "to": "sh_effectifs", "transport": "saisie manuelle", "payload": "ETP par secteur / semaine (DB_effectifs)", "format": "valeurs", "trigger": "hebdo (Julien)" },
-    { "from": "mapping_secteurs", "to": "sh_effectifs", "transport": "saisie manuelle", "payload": "affectation catégorie → secteur (trame_secteurs)", "format": "valeurs", "trigger": "à la création de catégorie" },
+    { "from": "mapping_secteurs", "to": "sh_effectifs", "transport": "saisie manuelle", "payload": "affectation secteur sur catégories déjà listées (trame_secteurs)", "format": "valeurs", "trigger": "à la création de catégorie" },
     { "from": "param_alertes", "to": "sh_couts_mp", "transport": "saisie manuelle", "payload": "seuils veille / critique + emails", "format": "valeurs", "trigger": "ponctuel" },
     { "from": "prix_manuels", "to": "sh_recettes", "transport": "saisie manuelle", "payload": "produits hors référentiel (eau, film...)", "format": "valeurs", "trigger": "ponctuel" },
 
     { "from": "scr_ref_produits", "to": "sh_ref_produits", "transport": "écriture", "payload": "référentiel produits (BDD)", "format": "valeurs", "trigger": "hebdo" },
     { "from": "scr_couts_mp", "to": "sh_couts_mp", "transport": "écriture (append)", "payload": "commandes MP vers Historique", "format": "valeurs", "trigger": "quotidien" },
     { "from": "scr_production", "to": "sh_production", "transport": "écriture (append)", "payload": "OF classifiés", "format": "valeurs", "trigger": "planifié" },
+    { "from": "sh_production", "to": "scr_sync_secteurs", "transport": "lecture Sheets", "payload": "catégories distinctes (colonne Category, résolue par en-tête)", "format": "valeurs", "trigger": "à chaque sync" },
+    { "from": "scr_sync_secteurs", "to": "sh_effectifs", "transport": "écriture (append-only)", "payload": "nouvelles catégories dans trame_secteurs (secteur vide)", "format": "valeurs", "trigger": "à chaque sync" },
     { "from": "scr_ventes_hh", "to": "sh_ventes_hh", "transport": "écriture (truncate)", "payload": "journal ventes", "format": "valeurs", "trigger": "planifié" },
     { "from": "scr_popina", "to": "sh_popina", "transport": "écriture", "payload": "ventes par PDV + consolidé", "format": "valeurs", "trigger": "mensuel" },
     { "from": "scr_agicap", "to": "sh_agicap", "transport": "écriture (truncate)", "payload": "trésorerie", "format": "valeurs", "trigger": "planifié" },
