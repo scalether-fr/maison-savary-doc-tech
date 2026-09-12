@@ -242,14 +242,10 @@
       "order": 21,
       "meta": {
         "Fonction": "syncTrameSecteurs, lit l'onglet BDD du Sheet Production, résout la colonne Category par en-tête (jamais par index en dur), ajoute uniquement les catégories absentes de trame_secteurs (appendRow, secteur laissé vide)",
-        "Déclenchement": "Manuel pour l'instant",
+        "Déclenchement": "Quotidien, entre 4h et 5h",
         "Dépendance": "Aucune (lecture Sheets directe, plus de passage par BigQuery)",
         "Garantie": "Jamais de réécriture en bloc de trame_secteurs, clé stable = nom de catégorie"
-      },
-      "todo": [
-        "Décider du déclenchement définitif : trigger horaire séparé, ou appel direct depuis scr_production juste après l'écriture des OF pour éliminer toute dépendance temporelle entre les deux scripts.",
-        "Généraliser la résolution par en-tête aux colonnes de trame_secteurs elle-même (Category / Secteur) plutôt que des colonnes A/B fixes."
-      ]
+      }
     },
     {
       "id": "scr_ventes_hh",
@@ -355,10 +351,7 @@
         "Onglets": "DB_effectifs (ETP), trame_secteurs (mapping catégorie → secteur)",
         "Alimentation": "Saisie manuelle (Julien) pour l'ETP + affectation secteur ; listing des catégories alimenté par scr_sync_secteurs",
         "Consommé par": "BQ source_sheet_rh et source_sheet_mapping_secteurs"
-      },
-      "todo": [
-        "Ancien onglet ordres_production (listing de catégories via sync BQ) devenu obsolète après passage à scr_sync_secteurs. Vérifier qu'il n'est plus référencé ailleurs avant suppression."
-      ]
+      }
     },
     {
       "id": "sh_ref_produits",
@@ -409,7 +402,7 @@
       ],
       "meta": {
         "ID": "12usaOi5e241jGG-JAxAfRH6-xtrtO9Q9sdNz9T1lOE4",
-        "Onglets": "BDD (OF, colonne Category source du mapping secteurs), export P&L (QUERY 12 mois glissants)",
+        "Onglets": "BDD (OF), export P&L (QUERY 12 mois glissants)",
         "Alimentation": "Script Production",
         "Consommé par": "BQ ordres_production, Construction P&L, scr_sync_secteurs"
       }
